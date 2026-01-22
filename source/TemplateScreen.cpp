@@ -2,8 +2,8 @@
 #include "SDL/SDLInput.h"
 #include "core/Engine.h"
 #include "core/Renderer.h"
-#include "core/Utils.h"
 #include "core/ResourceManager.h"
+#include "core/Utils.h"
 
 #include <iostream>
 
@@ -12,7 +12,7 @@ constexpr int display_width = 64;
 constexpr int display_height = 32;
 constexpr int display_size = display_width * display_height;
 constexpr int memory_size = 65535;
-constexpr int program_address = 0x0000;
+constexpr int program_address = 0x0100;
 
 static int display[display_height][display_width];
 static char memory[memory_size];
@@ -24,11 +24,11 @@ void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
 	m_input->SetQuitCallback([this]() { m_engine->Quit(); });
-	
+
 	memset(display, 0, sizeof(int) * display_size);
 	memset(memory, 0, memory_size);
-	
-	std::string path = age::getResourcesPath().string() + "/Roms/cpu_instrs.gb";
+
+	std::string path = age::getResourcesPath() + "/Roms/01-special.gb";
 
 	std::ifstream input(path, std::ios::binary);
 
@@ -59,6 +59,8 @@ void TemplateScreen::Update(const double dt)
 	unsigned char n2 = b1 & 0x0F;
 	unsigned char n3 = (b2 >> 4) & 0x0F;
 	unsigned char n4 = b2 & 0x0F;
+
+	std::cout << b1 << b2 << std::endl;
 }
 
 void TemplateScreen::Draw()
