@@ -1,0 +1,3 @@
+[submodule "contrib/AGE"]
+	path = contrib/AGE
+	url = https://github.com/owenz0r/AGE.git
