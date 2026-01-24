@@ -31,6 +31,20 @@ static unsigned char E;
 static unsigned char H;
 static unsigned char L;
 
+static std::string charToHex(unsigned char c)
+{
+	std::stringstream ss;
+	ss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
+	return ss.str();
+}
+
+static std::string intToHex(int i)
+{
+	std::stringstream ss;
+	ss << std::hex << std::setw(4) << std::setfill('0') << i;
+	return ss.str();
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -86,8 +100,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "JMP a16 - " << "0x" << std::hex << (int)b3 << (int)b2 << std::endl;
-
+					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 					PC = b3 << 8 | b2;
 					break;
 				}
@@ -95,7 +108,8 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "LOAD HL d16 - " << "0x" << std::hex << (int)b3 << (int)b2 << std::endl;
+					std::cout << "LOAD HL d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+
 					H = b3;
 					L = b2;
 				}
@@ -104,19 +118,6 @@ void TemplateScreen::Update(const double dt)
 	}
 }
 
-static std::string charToHex(unsigned char c)
-{
-	std::stringstream ss;
-	ss << std::hex << std::setw(2) << std::setfill('0') << (int)c;
-	return ss.str();
-}
-
-static std::string intToHex(int i)
-{
-	std::stringstream ss;
-	ss << std::hex << std::setw(4) << std::setfill('0') << i;
-	return ss.str();
-}
 void TemplateScreen::Draw()
 {
 	age::TextParams params;
