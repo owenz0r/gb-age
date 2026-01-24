@@ -7,4 +7,7 @@ class TemplateScreen : public age::Screen
 	void Init() override;
 	void Update(const double dt) override;
 	void Draw() override;
+
+  private:
+	bool m_continue = true;
 };
