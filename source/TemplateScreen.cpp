@@ -46,6 +46,16 @@ static std::string intToHex(int i)
 	return ss.str();
 }
 
+static bool ZFlag()
+{
+	return F & 0x01;
+}
+
+static void setZ(bool state)
+{
+	state == true ? F = F | 0x01 : F = F & 0xFE;
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -103,6 +113,8 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "LOAD C, d8 - " << charToHex(b2) << std::endl;
 
 					C = b2;
+
+					setZ(C == 0);
 					break;
 				}
 			case 0x11:
@@ -113,6 +125,8 @@ void TemplateScreen::Update(const double dt)
 
 					D = b3;
 					E = b2;
+
+					setZ(D == 0 && E == 0);
 					break;
 				}
 			case 0x12:
@@ -121,6 +135,8 @@ void TemplateScreen::Update(const double dt)
 
 					int address = D << 8 | E;
 					memory[address] = A;
+
+					setZ(A == 0);
 					break;
 				}
 			case 0x1c:
@@ -128,6 +144,20 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "INC E" << std::endl;
 
 					E++;
+
+					setZ(E == 0);
+					break;
+				}
+			case 0x20:
+				{
+					std::cout << "JR NZ, s8" << std::endl;
+
+					if (!ZFlag())
+					{
+						unsigned char b2 = memory[PC++];
+						PC += b2;
+						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+					}
 					break;
 				}
 			case 0x21:
@@ -138,6 +168,8 @@ void TemplateScreen::Update(const double dt)
 
 					H = b3;
 					L = b2;
+
+					setZ(H == 0 && L == 0);
 					break;
 				}
 			case 0x2a:
@@ -148,12 +180,16 @@ void TemplateScreen::Update(const double dt)
 					A = memory[address++];
 					L = address & 0xFF;
 					H = address >> 8;
+
+					setZ(A == 0);
 					break;
 				}
 			case 0x47:
 				{
 					B = A;
 					std::cout << "LOAD B, A" << std::endl;
+
+					setZ(B == 0);
 					break;
 				}
 			case 0xC3:
@@ -162,6 +198,8 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b3 = memory[PC++];
 					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 					PC = b3 << 8 | b2;
+
+					setZ(PC == 0);
 					break;
 				}
 			default:
