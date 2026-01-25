@@ -5,6 +5,7 @@
 #include "core/ResourceManager.h"
 #include "core/Utils.h"
 
+#include <_abort.h>
 #include <iostream>
 #include <sstream>
 
@@ -96,12 +97,37 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "NOP" << std::endl;
 					break;
 				}
-			case 0xC3:
+			case 0x0e:
+				{
+					unsigned char b2 = memory[PC++];
+					std::cout << "LOAD C, d8 - " << charToHex(b2) << std::endl;
+
+					C = b2;
+					break;
+				}
+			case 0x11:
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
-					PC = b3 << 8 | b2;
+					std::cout << "LOAD DE d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+
+					D = b3;
+					E = b2;
+					break;
+				}
+			case 0x12:
+				{
+					std::cout << "LOAD (DE), A" << std::endl;
+
+					int address = D << 8 | E;
+					memory[address] = A;
+					break;
+				}
+			case 0x1c:
+				{
+					std::cout << "INC E" << std::endl;
+
+					E++;
 					break;
 				}
 			case 0x21:
@@ -112,7 +138,34 @@ void TemplateScreen::Update(const double dt)
 
 					H = b3;
 					L = b2;
+					break;
 				}
+			case 0x2a:
+				{
+					std::cout << "LOAD A, (HL+)" << std::endl;
+
+					int address = H << 8 | L;
+					A = memory[address++];
+					L = address & 0xFF;
+					H = address >> 8;
+					break;
+				}
+			case 0x47:
+				{
+					B = A;
+					std::cout << "LOAD B, A" << std::endl;
+					break;
+				}
+			case 0xC3:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					PC = b3 << 8 | b2;
+					break;
+				}
+			default:
+				abort();
 		}
 		m_continue = false;
 	}
