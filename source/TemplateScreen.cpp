@@ -154,7 +154,7 @@ void TemplateScreen::Update(const double dt)
 
 					if (!ZFlag())
 					{
-						unsigned char b2 = memory[PC++];
+						char b2 = memory[PC++];
 						PC += b2;
 						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
 					}
