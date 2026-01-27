@@ -92,7 +92,8 @@ void TemplateScreen::Update(const double dt)
 {
 	if (m_continue)
 	{
-		std::cout << "PC 0x" << std::hex << PC << " - ";
+		static int count = 0;
+		std::cout << std::dec << count++ << " PC 0x" << std::hex << PC << " - ";
 		unsigned char b1 = memory[PC++];
 
 		// unsigned char n1 = (b1 >> 4) & 0x0F;
@@ -105,6 +106,15 @@ void TemplateScreen::Update(const double dt)
 			case 0x00:
 				{
 					std::cout << "NOP" << std::endl;
+					break;
+				}
+			case 0x0d:
+				{
+					std::cout << "DEC C" << std::endl;
+					
+					C--;
+					
+					setZ(C == 0);
 					break;
 				}
 			case 0x0e:
@@ -139,6 +149,15 @@ void TemplateScreen::Update(const double dt)
 					setZ(A == 0);
 					break;
 				}
+			case 0x14:
+				{
+					std::cout << "INC D" << std::endl;
+					
+					D++;
+					
+					setZ(D == 0);
+					break;
+				}
 			case 0x1c:
 				{
 					std::cout << "INC E" << std::endl;
@@ -151,10 +170,11 @@ void TemplateScreen::Update(const double dt)
 			case 0x20:
 				{
 					std::cout << "JR NZ, s8" << std::endl;
-
+					char b2 = memory[PC++];
+					
 					if (!ZFlag())
 					{
-						char b2 = memory[PC++];
+						
 						PC += b2;
 						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
 					}
@@ -205,7 +225,7 @@ void TemplateScreen::Update(const double dt)
 			default:
 				abort();
 		}
-		m_continue = false;
+		//m_continue = false;
 	}
 }
 
@@ -216,6 +236,7 @@ void TemplateScreen::Draw()
 	params.pos = {6, 6};
 	params.height = 1.0f;
 	params.color = age::Color::White();
+	params.temp = false;
 	m_renderer->DrawText(params);
 
 	params.text = "AF";
@@ -224,51 +245,62 @@ void TemplateScreen::Draw()
 
 	params.text = charToHex(A) + " " + charToHex(F);
 	params.pos.x = 10;
+	params.temp = true;
 	m_renderer->DrawText(params);
 
 	params.text = "BC";
 	params.pos.x = 6;
 	params.pos.y++;
+	params.temp = false;
 	m_renderer->DrawText(params);
 
 	params.text = charToHex(B) + " " + charToHex(C);
 	params.pos.x = 10;
+	params.temp = true;
 	m_renderer->DrawText(params);
 
 	params.text = "DE";
 	params.pos.x = 6;
 	params.pos.y++;
+	params.temp = false;
 	m_renderer->DrawText(params);
 
 	params.text = charToHex(D) + " " + charToHex(E);
 	params.pos.x = 10;
+	params.temp = true;
 	m_renderer->DrawText(params);
 
 	params.text = "HL";
 	params.pos.x = 6;
 	params.pos.y++;
+	params.temp = false;
 	m_renderer->DrawText(params);
 
 	params.text = charToHex(H) + " " + charToHex(L);
 	params.pos.x = 6;
 	params.pos.x = 10;
+	params.temp = true;
 	m_renderer->DrawText(params);
 
 	params.text = "SP";
 	params.pos.x = 6;
 	params.pos.y += 2;
+	params.temp = false;
 	m_renderer->DrawText(params);
 
 	params.text = intToHex(SP);
 	params.pos.x = 10;
+	params.temp = true;
 	m_renderer->DrawText(params);
 
 	params.text = "PC";
 	params.pos.x = 6;
 	params.pos.y++;
+	params.temp = false;
 	m_renderer->DrawText(params);
 
 	params.text = intToHex(PC);
 	params.pos.x = 10;
+	params.temp = true;
 	m_renderer->DrawText(params);
 }
