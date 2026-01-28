@@ -209,7 +209,15 @@ void TemplateScreen::Update(const double dt)
 					B = A;
 					std::cout << "LOAD B, A" << std::endl;
 
-					setZ(B == 0);
+					//setZ(B == 0);
+					break;
+				}
+			case 0x78:
+				{
+					A = B;
+					std::cout << "LOAD A, B" << std::endl;
+					
+					//setZ(A == 0);
 					break;
 				}
 			case 0xC3:
