@@ -23,6 +23,8 @@ static unsigned int PC = program_address;
 static unsigned int PEND = 0xFFFF;
 static unsigned int SP;
 
+static bool IME = true;
+
 static unsigned char A;
 static unsigned char F;
 static unsigned char B;
@@ -54,6 +56,36 @@ static bool ZFlag()
 static void setZ(bool state)
 {
 	state == true ? F = F | 0x01 : F = F & 0xFE;
+}
+
+static bool NFlag()
+{
+	return F & 0x02;
+}
+
+static bool setN(bool state)
+{
+	state == true ? F = F | 0x02 : F = F & 0xFD;
+}
+
+static bool HFlag()
+{
+	return F & 0x04;
+}
+
+static bool setH(bool state)
+{
+	state == true ? F = F | 0x04 : F = F & 0xFB;
+}
+
+static bool CFlag()
+{
+	return F & 0x08;
+}
+
+static void setC(bool state)
+{
+	state == true ? F = F | 0x08 : F = F & 0xF7;
 }
 
 void TemplateScreen::Init()
@@ -115,6 +147,7 @@ void TemplateScreen::Update(const double dt)
 					C--;
 					
 					setZ(C == 0);
+					setN(true);
 					break;
 				}
 			case 0x0e:
@@ -124,7 +157,7 @@ void TemplateScreen::Update(const double dt)
 
 					C = b2;
 
-					setZ(C == 0);
+					//setZ(C == 0);
 					break;
 				}
 			case 0x11:
@@ -136,7 +169,7 @@ void TemplateScreen::Update(const double dt)
 					D = b3;
 					E = b2;
 
-					setZ(D == 0 && E == 0);
+					//setZ(D == 0 && E == 0);
 					break;
 				}
 			case 0x12:
@@ -146,7 +179,7 @@ void TemplateScreen::Update(const double dt)
 					int address = D << 8 | E;
 					memory[address] = A;
 
-					setZ(A == 0);
+					//setZ(A == 0);
 					break;
 				}
 			case 0x14:
@@ -156,6 +189,7 @@ void TemplateScreen::Update(const double dt)
 					D++;
 					
 					setZ(D == 0);
+					setN(false);
 					break;
 				}
 			case 0x1c:
@@ -165,6 +199,7 @@ void TemplateScreen::Update(const double dt)
 					E++;
 
 					setZ(E == 0);
+					setN(false);
 					break;
 				}
 			case 0x20:
@@ -189,7 +224,7 @@ void TemplateScreen::Update(const double dt)
 					H = b3;
 					L = b2;
 
-					setZ(H == 0 && L == 0);
+					//setZ(H == 0 && L == 0);
 					break;
 				}
 			case 0x2a:
@@ -201,7 +236,21 @@ void TemplateScreen::Update(const double dt)
 					L = address & 0xFF;
 					H = address >> 8;
 
-					setZ(A == 0);
+					//setZ(A == 0);
+					break;
+				}
+			case 0x31:
+				{
+					
+					
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					
+					std::cout << "LOAD SP, d16" << std::endl;
+					
+					SP = b3 << 8 | b2;
+					
+					//setZ(A == 0);
 					break;
 				}
 			case 0x47:
@@ -228,6 +277,25 @@ void TemplateScreen::Update(const double dt)
 					PC = b3 << 8 | b2;
 
 					setZ(PC == 0);
+					break;
+				}
+			case 0xEA:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "LD (a16), A - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					unsigned int address = b3 << 8 | b2;
+					memory[address] = A;
+					
+					//setZ(PC == 0);
+					break;
+				}
+			case 0xF3:
+				{
+					IME = false;
+					std::cout << "DI - IME DISABLED" << std::endl;
+					
+					//setZ(A == 0);
 					break;
 				}
 			default:
