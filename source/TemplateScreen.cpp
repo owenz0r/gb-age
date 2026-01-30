@@ -88,6 +88,23 @@ static void setC(bool state)
 	state == true ? F = F | 0x08 : F = F & 0xF7;
 }
 
+static void push16(const unsigned int value)
+{
+	SP--;
+	unsigned char byte = value >> 8;
+	memory[SP--] = byte;
+	byte = value & 0xFF;
+	memory[SP] = byte;
+}
+
+static unsigned int pop16()
+{
+	unsigned char b2 = memory[SP++];
+	unsigned char b3 = memory[SP++];
+	
+	return b3 << 8 | b2;
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -140,6 +157,15 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "NOP" << std::endl;
 					break;
 				}
+			case 0x02:
+				{
+					std::cout << "LD (BC), A" << std::endl;
+					unsigned int address = B << 8 | C;
+					memory[address] = A;
+					PC++;
+					
+					break;
+				}
 			case 0x0d:
 				{
 					std::cout << "DEC C" << std::endl;
@@ -176,7 +202,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					std::cout << "LOAD (DE), A" << std::endl;
 
-					int address = D << 8 | E;
+					unsigned int address = D << 8 | E;
 					memory[address] = A;
 
 					//setZ(A == 0);
@@ -190,6 +216,16 @@ void TemplateScreen::Update(const double dt)
 					
 					setZ(D == 0);
 					setN(false);
+					break;
+				}
+			case 0x18:
+				{
+					std::cout << "JR s8" << std::endl;
+					char b2 = memory[PC++];
+					
+					PC += b2;
+					std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+					
 					break;
 				}
 			case 0x1c:
@@ -231,7 +267,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					std::cout << "LOAD A, (HL+)" << std::endl;
 
-					int address = H << 8 | L;
+					unsigned int address = H << 8 | L;
 					A = memory[address++];
 					L = address & 0xFF;
 					H = address >> 8;
@@ -241,14 +277,23 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x31:
 				{
-					
-					
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
 					
 					std::cout << "LOAD SP, d16" << std::endl;
 					
 					SP = b3 << 8 | b2;
+					
+					//setZ(A == 0);
+					break;
+				}
+			case 0x3E:
+				{
+					unsigned char b2 = memory[PC++];
+					
+					std::cout << "LOAD A, d8" << std::endl;
+					
+					A = b2;
 					
 					//setZ(A == 0);
 					break;
@@ -261,12 +306,54 @@ void TemplateScreen::Update(const double dt)
 					//setZ(B == 0);
 					break;
 				}
+			case 0x4D:
+			{
+				C = L;
+				std::cout << "LOAD C, L" << std::endl;
+				
+				//setZ(B == 0);
+				break;
+			}
+			case 0x6B:
+				{
+					L = E;
+					std::cout << "LOAD L, E" << std::endl;
+					
+					break;
+				}
 			case 0x78:
 				{
 					A = B;
 					std::cout << "LOAD A, B" << std::endl;
 					
 					//setZ(A == 0);
+					break;
+				}
+			case 0x7C:
+				{
+					A = H;
+					std::cout << "LOAD A, H" << std::endl;
+					
+					//setZ(A == 0);
+					break;
+				}
+			case 0x7D:
+				{
+					A = L;
+					std::cout << "LOAD A, L" << std::endl;
+					
+					//setZ(A == 0);
+					break;
+				}
+			case 0xC1:
+				{
+					unsigned int value = pop16();
+					std::cout << "POP BC - " << "0x" << intToHex(value) << std::endl;
+					B = value >> 8;
+					C = value & 0xFF;
+					PC++;
+					
+					//setZ(PC == 0);
 					break;
 				}
 			case 0xC3:
@@ -276,7 +363,63 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 					PC = b3 << 8 | b2;
 
-					setZ(PC == 0);
+					//setZ(PC == 0);
+					break;
+				}
+			case 0xCD:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "CALL a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					
+//					SP--;
+//					unsigned char byte = PC >> 8;
+//					memory[SP--] = byte;
+//					//SP--;
+//					byte = PC & 0xFF;
+//					memory[SP] = byte;
+					
+					push16(PC);
+					
+					PC = b3 << 8 | b2;
+					
+					//setZ(PC == 0);
+					break;
+				}
+			case 0xC9:
+			{
+				//unsigned char b2 = memory[SP++];
+				//unsigned char b3 = memory[SP++];
+				
+				auto address = pop16();
+				
+				std::cout << "RET - " << "0x" << intToHex(address) << std::endl;
+				
+				//unsigned int address = b3 << 8 | b2;
+				PC = address;
+				
+				//setZ(PC == 0);
+				break;
+			}
+			case 0xE0:
+				{
+					unsigned char b2 = memory[PC++];
+					std::cout << "LD (a8), A - " << "0xFF" << charToHex(b2) << std::endl;
+					unsigned int address = 0xFF << 8 | b2;
+					memory[address] = A;
+					
+					//setZ(PC == 0);
+					break;
+				}
+			case 0xE1:
+				{
+					unsigned int value = pop16();
+					std::cout << "POP HL - " << "0x" << intToHex(value) << std::endl;
+					H = value >> 8;
+					L = value & 0xFF;
+					PC++;
+					
+					//setZ(PC == 0);
 					break;
 				}
 			case 0xEA:
@@ -288,6 +431,15 @@ void TemplateScreen::Update(const double dt)
 					memory[address] = A;
 					
 					//setZ(PC == 0);
+					break;
+				}
+			case 0xE5:
+				{
+					unsigned int HL = H << 8 | L;
+					std::cout << "PUSH HL - " << "0x" << intToHex(HL) << std::endl;
+					push16(HL);
+					PC++;
+
 					break;
 				}
 			case 0xF3:
