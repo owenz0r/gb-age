@@ -298,53 +298,461 @@ void TemplateScreen::Update(const double dt)
 					//setZ(A == 0);
 					break;
 				}
+			case 0x40:
+				{
+					B = B;
+					std::cout << "LOAD B, B" << std::endl;
+					
+					break;
+				}
+			case 0x41:
+				{
+					B = C;
+					std::cout << "LOAD B, C" << std::endl;
+					
+					break;
+				}
+			case 0x42:
+				{
+					B = D;
+					std::cout << "LOAD B, D" << std::endl;
+					
+					break;
+				}
+			case 0x43:
+				{
+					B = E;
+					std::cout << "LOAD B, E" << std::endl;
+					
+					break;
+				}
+			case 0x44:
+				{
+					B = H;
+					std::cout << "LOAD B, H" << std::endl;
+					
+					break;
+				}
+			case 0x45:
+				{
+					B = L;
+					std::cout << "LOAD B, L" << std::endl;
+					
+					break;
+				}
+			case 0x46:
+				{
+					unsigned int address = H << 8 | L;
+					B = memory[address];
+					std::cout << "LOAD B, (HL)" << std::endl;
+
+					break;
+				}
 			case 0x47:
 				{
 					B = A;
 					std::cout << "LOAD B, A" << std::endl;
-
-					//setZ(B == 0);
+					
+					break;
+				}
+			case 0x48:
+				{
+					C = B;
+					std::cout << "LOAD C, B" << std::endl;
+					
+					break;
+				}
+			case 0x49:
+				{
+					C = C;
+					std::cout << "LOAD C, C" << std::endl;
+					
+					break;
+				}
+			case 0x4A:
+				{
+					C = D;
+					std::cout << "LOAD C, D" << std::endl;
+					
+					break;
+				}
+			case 0x4B:
+				{
+					C = E;
+					std::cout << "LOAD C, E" << std::endl;
+					
+					break;
+				}
+			case 0x4C:
+				{
+					C = H;
+					std::cout << "LOAD C, H" << std::endl;
+					
 					break;
 				}
 			case 0x4D:
+				{
+					C = L;
+					std::cout << "LOAD C, L" << std::endl;
+					
+					break;
+				}
+			case 0x4E:
+				{
+					unsigned int address = H << 8 | L;
+					C = memory[address];
+					std::cout << "LOAD C, (HL)" << std::endl;
+					
+					break;
+				}
+			case 0x4F:
+				{
+					C = A;
+					std::cout << "LOAD C, A" << std::endl;
+					
+					break;
+				}
+			case 0x50:
 			{
-				C = L;
-				std::cout << "LOAD C, L" << std::endl;
+				D = B;
+				std::cout << "LOAD D, B" << std::endl;
 				
-				//setZ(B == 0);
+				break;
+			}
+			case 0x51:
+			{
+				D = C;
+				std::cout << "LOAD D, C" << std::endl;
+				
+				break;
+			}
+			case 0x52:
+			{
+				D = D;
+				std::cout << "LOAD D, D" << std::endl;
+				
+				break;
+			}
+			case 0x53:
+			{
+				D = E;
+				std::cout << "LOAD D, E" << std::endl;
+				
+				break;
+			}
+			case 0x54:
+			{
+				D = H;
+				std::cout << "LOAD D, H" << std::endl;
+				
+				break;
+			}
+			case 0x55:
+			{
+				D = L;
+				std::cout << "LOAD D, L" << std::endl;
+				
+				break;
+			}
+			case 0x56:
+			{
+				unsigned int address = H << 8 | L;
+				D = memory[address];
+				std::cout << "LOAD D, (HL)" << std::endl;
+				
+				break;
+			}
+			case 0x57:
+			{
+				D = A;
+				std::cout << "LOAD D, A" << std::endl;
+				
+				break;
+			}
+			case 0x58:
+			{
+				E = B;
+				std::cout << "LOAD E, B" << std::endl;
+				
+				break;
+			}
+			case 0x59:
+			{
+				E = C;
+				std::cout << "LOAD E, C" << std::endl;
+				
+				break;
+			}
+			case 0x5A:
+			{
+				E = D;
+				std::cout << "LOAD E, D" << std::endl;
+				
+				break;
+			}
+			case 0x5B:
+			{
+				E = E;
+				std::cout << "LOAD E, E" << std::endl;
+				
+				break;
+			}
+			case 0x5C:
+			{
+				E = H;
+				std::cout << "LOAD E, H" << std::endl;
+				
+				break;
+			}
+			case 0x5D:
+			{
+				E = L;
+				std::cout << "LOAD E, L" << std::endl;
+				
+				break;
+			}
+			case 0x5E:
+			{
+				unsigned int address = H << 8 | L;
+				E = memory[address];
+				std::cout << "LOAD E, (HL)" << std::endl;
+				
+				break;
+			}
+			case 0x5F:
+			{
+				E = A;
+				std::cout << "LOAD E, A" << std::endl;
+				
+				break;
+			}
+			case 0x60:
+			{
+				H = B;
+				std::cout << "LOAD H, B" << std::endl;
+				
+				break;
+			}
+			case 0x61:
+			{
+				H = C;
+				std::cout << "LOAD H, C" << std::endl;
+				
+				break;
+			}
+			case 0x62:
+			{
+				H = D;
+				std::cout << "LOAD H, D" << std::endl;
+				
+				break;
+			}
+			case 0x63:
+			{
+				H = E;
+				std::cout << "LOAD H, E" << std::endl;
+				
+				break;
+			}
+			case 0x64:
+			{
+				H = H;
+				std::cout << "LOAD H, H" << std::endl;
+				
+				break;
+			}
+			case 0x65:
+			{
+				H = L;
+				std::cout << "LOAD H, L" << std::endl;
+				
+				break;
+			}
+			case 0x66:
+			{
+				unsigned int address = H << 8 | L;
+				H = memory[address];
+				std::cout << "LOAD H, (HL)" << std::endl;
+				
+				break;
+			}
+			case 0x67:
+			{
+				H = A;
+				std::cout << "LOAD H, A" << std::endl;
+				
+				break;
+			}
+			case 0x68:
+			{
+				L = B;
+				std::cout << "LOAD L, B" << std::endl;
+				
+				break;
+			}
+			case 0x69:
+			{
+				L = C;
+				std::cout << "LOAD L, C" << std::endl;
+				
+				break;
+			}
+			case 0x6A:
+			{
+				L = D;
+				std::cout << "LOAD L, D" << std::endl;
+				
 				break;
 			}
 			case 0x6B:
-				{
-					L = E;
-					std::cout << "LOAD L, E" << std::endl;
-					
-					break;
-				}
+			{
+				L = E;
+				std::cout << "LOAD L, E" << std::endl;
+				
+				break;
+			}
+			case 0x6C:
+			{
+				L = H;
+				std::cout << "LOAD L, H" << std::endl;
+				
+				break;
+			}
+			case 0x6D:
+			{
+				L = L;
+				std::cout << "LOAD L, L" << std::endl;
+				
+				break;
+			}
+			case 0x6E:
+			{
+				unsigned int address = H << 8 | L;
+				L = memory[address];
+				std::cout << "LOAD L, (HL)" << std::endl;
+				
+				break;
+			}
+			case 0x6F:
+			{
+				L = A;
+				std::cout << "LOAD L, A" << std::endl;
+				
+				break;
+			}
+			case 0x70:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = B;
+				std::cout << "LOAD (HL), B" << std::endl;
+				
+				break;
+			}
+			case 0x71:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = C;
+				std::cout << "LOAD (HL), C" << std::endl;
+				
+				break;
+			}
+			case 0x72:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = D;
+				std::cout << "LOAD (HL), D" << std::endl;
+				
+				break;
+			}
+			case 0x73:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = E;
+				std::cout << "LOAD (HL), E" << std::endl;
+				
+				break;
+			}
+			case 0x74:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = H;
+				std::cout << "LOAD (HL), H" << std::endl;
+				
+				break;
+			}
+			case 0x75:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = L;
+				std::cout << "LOAD (HL), L" << std::endl;
+				
+				break;
+			}
+			case 0x77:
+			{
+				unsigned int address = H << 8 | L;
+				memory[address] = A;
+				std::cout << "LOAD (HL), A" << std::endl;
+				
+				break;
+			}
 			case 0x78:
-				{
-					A = B;
-					std::cout << "LOAD A, B" << std::endl;
-					
-					//setZ(A == 0);
-					break;
-				}
+			{
+				A = B;
+				std::cout << "LOAD A, B" << std::endl;
+				
+				break;
+			}
+			case 0x79:
+			{
+				A = C;
+				std::cout << "LOAD A, C" << std::endl;
+				
+				break;
+			}
+			case 0x7A:
+			{
+				A = D;
+				std::cout << "LOAD A, D" << std::endl;
+				
+				break;
+			}
+			case 0x7B:
+			{
+				A = E;
+				std::cout << "LOAD A, E" << std::endl;
+				
+				break;
+			}
 			case 0x7C:
-				{
-					A = H;
-					std::cout << "LOAD A, H" << std::endl;
-					
-					//setZ(A == 0);
-					break;
-				}
+			{
+				A = H;
+				std::cout << "LOAD A, H" << std::endl;
+				
+				break;
+			}
 			case 0x7D:
-				{
-					A = L;
-					std::cout << "LOAD A, L" << std::endl;
-					
-					//setZ(A == 0);
-					break;
-				}
+			{
+				A = L;
+				std::cout << "LOAD A, L" << std::endl;
+				
+				break;
+			}
+			case 0x7E:
+			{
+				unsigned int address = H << 8 | L;
+				A = memory[address];
+				std::cout << "LOAD A, (HL)" << std::endl;
+				
+				break;
+			}
+			case 0x7F:
+			{
+				A = A;
+				std::cout << "LOAD A, A" << std::endl;
+				
+				break;
+			}
 			case 0xC1:
 				{
 					unsigned int value = pop16();
