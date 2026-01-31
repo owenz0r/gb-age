@@ -162,11 +162,10 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "LD (BC), A" << std::endl;
 					unsigned int address = B << 8 | C;
 					memory[address] = A;
-					PC++;
 					
 					break;
 				}
-			case 0x0d:
+			case 0x0D:
 				{
 					std::cout << "DEC C" << std::endl;
 					
@@ -176,14 +175,20 @@ void TemplateScreen::Update(const double dt)
 					setN(true);
 					break;
 				}
-			case 0x0e:
+			case 0x0A:
+			{
+				unsigned int address = B << 8 | C;
+				A = memory[address];
+				std::cout << "LOAD A, (BC) - " << charToHex(address) << std::endl;
+				
+				break;
+			}
+			case 0x0E:
 				{
 					unsigned char b2 = memory[PC++];
 					std::cout << "LOAD C, d8 - " << charToHex(b2) << std::endl;
-
 					C = b2;
 
-					//setZ(C == 0);
 					break;
 				}
 			case 0x11:
@@ -228,7 +233,15 @@ void TemplateScreen::Update(const double dt)
 					
 					break;
 				}
-			case 0x1c:
+			case 0x1A:
+			{
+				unsigned int address = D << 8 | E;
+				A = memory[address];
+				std::cout << "LOAD A, (DE) - " << charToHex(address) << std::endl;
+				
+				break;
+			}
+			case 0x1C:
 				{
 					std::cout << "INC E" << std::endl;
 
@@ -263,7 +276,7 @@ void TemplateScreen::Update(const double dt)
 					//setZ(H == 0 && L == 0);
 					break;
 				}
-			case 0x2a:
+			case 0x2A:
 				{
 					std::cout << "LOAD A, (HL+)" << std::endl;
 
@@ -272,7 +285,6 @@ void TemplateScreen::Update(const double dt)
 					L = address & 0xFF;
 					H = address >> 8;
 
-					//setZ(A == 0);
 					break;
 				}
 			case 0x31:
@@ -287,6 +299,17 @@ void TemplateScreen::Update(const double dt)
 					//setZ(A == 0);
 					break;
 				}
+			case 0x3A:
+			{
+				std::cout << "LOAD A, (HL+)" << std::endl;
+				
+				unsigned int address = H << 8 | L;
+				A = memory[address--];
+				L = address & 0xFF;
+				H = address >> 8;
+				
+				break;
+			}
 			case 0x3E:
 				{
 					unsigned char b2 = memory[PC++];
@@ -753,13 +776,27 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xC0:
+			{
+				if (ZFlag())
+				{
+					//PC++;
+					std::cout << "RET NZ - No jump" << std::endl;
+				}
+				else
+				{
+					PC = pop16();
+					std::cout << "RET NZ - " << "0x" << intToHex(PC) << std::endl;
+				}
+				break;
+			}
 			case 0xC1:
 				{
 					unsigned int value = pop16();
 					std::cout << "POP BC - " << "0x" << intToHex(value) << std::endl;
 					B = value >> 8;
 					C = value & 0xFF;
-					PC++;
+					//PC++;
 					
 					//setZ(PC == 0);
 					break;
@@ -825,7 +862,7 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "POP HL - " << "0x" << intToHex(value) << std::endl;
 					H = value >> 8;
 					L = value & 0xFF;
-					PC++;
+					//PC++;
 					
 					//setZ(PC == 0);
 					break;
@@ -846,7 +883,7 @@ void TemplateScreen::Update(const double dt)
 					unsigned int HL = H << 8 | L;
 					std::cout << "PUSH HL - " << "0x" << intToHex(HL) << std::endl;
 					push16(HL);
-					PC++;
+					//PC++;
 
 					break;
 				}
@@ -855,9 +892,17 @@ void TemplateScreen::Update(const double dt)
 					IME = false;
 					std::cout << "DI - IME DISABLED" << std::endl;
 					
-					//setZ(A == 0);
 					break;
 				}
+			case 0xF5:
+			{
+				unsigned int value = A << 8 | F;
+				push16(value);
+				std::cout << "PUSH AF" << std::endl;
+				//PC++;
+				
+				break;
+			}
 			default:
 				abort();
 		}
