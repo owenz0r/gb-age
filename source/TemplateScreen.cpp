@@ -157,6 +157,17 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "NOP" << std::endl;
 					break;
 				}
+			case 0x01:
+			{
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				std::cout << "LOAD BC d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+				
+				B = b3;
+				C = b2;
+				
+				break;
+			}
 			case 0x02:
 				{
 					std::cout << "LD (BC), A" << std::endl;
@@ -165,6 +176,16 @@ void TemplateScreen::Update(const double dt)
 					
 					break;
 				}
+			case 0x03:
+			{
+				std::cout << "INC BC" << std::endl;
+				unsigned int value = B << 8 | C;
+				value++;
+				C = value & 0xFF;
+				B = value >> 8;
+				
+				break;
+			}
 			case 0x0D:
 				{
 					std::cout << "DEC C" << std::endl;
@@ -200,7 +221,6 @@ void TemplateScreen::Update(const double dt)
 					D = b3;
 					E = b2;
 
-					//setZ(D == 0 && E == 0);
 					break;
 				}
 			case 0x12:
@@ -213,6 +233,16 @@ void TemplateScreen::Update(const double dt)
 					//setZ(A == 0);
 					break;
 				}
+			case 0x13:
+			{
+				std::cout << "INC DE" << std::endl;
+				unsigned int value = D << 8 | E;
+				value++;
+				D = value & 0xFF;
+				E = value >> 8;
+				
+				break;
+			}
 			case 0x14:
 				{
 					std::cout << "INC D" << std::endl;
@@ -273,9 +303,29 @@ void TemplateScreen::Update(const double dt)
 					H = b3;
 					L = b2;
 
-					//setZ(H == 0 && L == 0);
 					break;
 				}
+			case 0x22:
+				{
+					std::cout << "LD (HL+), A" << std::endl;
+					unsigned int address = H << 8 | L;
+					memory[address++] = A;
+					
+					L = address & 0xFF;
+					H = address >> 8;
+					
+					break;
+				}
+			case 0x23:
+			{
+				std::cout << "INC HL" << std::endl;
+				unsigned int value = H << 8 | L;
+				value++;
+				H = value & 0xFF;
+				L = value >> 8;
+				
+				break;
+			}
 			case 0x2A:
 				{
 					std::cout << "LOAD A, (HL+)" << std::endl;
@@ -299,6 +349,24 @@ void TemplateScreen::Update(const double dt)
 					//setZ(A == 0);
 					break;
 				}
+			case 0x32:
+			{
+				std::cout << "LD (HL-), A" << std::endl;
+				unsigned int address = H << 8 | L;
+				memory[address--] = A;
+				
+				L = address & 0xFF;
+				H = address >> 8;
+				
+				break;
+			}
+			case 0x33:
+			{
+				std::cout << "INC SP" << std::endl;
+				SP++;
+				
+				break;
+			}
 			case 0x3A:
 			{
 				std::cout << "LOAD A, (HL+)" << std::endl;
