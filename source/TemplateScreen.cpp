@@ -186,6 +186,33 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x04:
+			{
+				std::cout << "INC B" << std::endl;
+				
+				B++;
+				
+				setZ(B == 0);
+				setN(false);
+				break;
+			}
+			case 0x05:
+			{
+				std::cout << "DEC B" << std::endl;
+				
+				B--;
+				
+				setZ(B == 0);
+				setN(false);
+				break;
+			}
+			case 0x06:
+			{
+				std::cout << "LD B, d8" << std::endl;
+				B = memory[PC++];
+				
+				break;
+			}
 			case 0x0D:
 				{
 					std::cout << "DEC C" << std::endl;
@@ -253,6 +280,23 @@ void TemplateScreen::Update(const double dt)
 					setN(false);
 					break;
 				}
+			case 0x15:
+			{
+				std::cout << "DEC D" << std::endl;
+				
+				D--;
+				
+				setZ(D == 0);
+				setN(false);
+				break;
+			}
+			case 0x16:
+			{
+				std::cout << "LD D, d8" << std::endl;
+				D = memory[PC++];
+				
+				break;
+			}
 			case 0x18:
 				{
 					std::cout << "JR s8" << std::endl;
@@ -326,6 +370,33 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x24:
+			{
+				std::cout << "INC H" << std::endl;
+				
+				H++;
+				
+				setZ(H == 0);
+				setN(false);
+				break;
+			}
+			case 0x25:
+			{
+				std::cout << "DEC H" << std::endl;
+				
+				H--;
+				
+				setZ(H == 0);
+				setN(false);
+				break;
+			}
+			case 0x26:
+			{
+				std::cout << "LD H, d8" << std::endl;
+				H = memory[PC++];
+				
+				break;
+			}
 			case 0x2A:
 				{
 					std::cout << "LOAD A, (HL+)" << std::endl;
@@ -364,6 +435,37 @@ void TemplateScreen::Update(const double dt)
 			{
 				std::cout << "INC SP" << std::endl;
 				SP++;
+				
+				break;
+			}
+			case 0x34:
+			{
+				std::cout << "INC (HL)" << std::endl;
+				
+				unsigned int address = H << 8 | L;
+				memory[address]++;
+				
+				setZ(memory[address] == 0);
+				setN(false);
+				break;
+			}
+			case 0x35:
+			{
+				std::cout << "DEC (HL)" << std::endl;
+				
+				unsigned int address = H << 8 | L;
+				memory[address]--;
+				
+				setZ(memory[address] == 0);
+				setN(false);
+				break;
+			}
+			case 0x36:
+			{
+				std::cout << "LD (HL), d8" << std::endl;
+				
+				unsigned int address = H << 8 | L;
+				memory[address] = memory[PC++];
 				
 				break;
 			}
