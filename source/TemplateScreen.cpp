@@ -946,6 +946,71 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xB0:
+			{
+				std::cout << "OR A, B" << std::endl;
+				A = A | B;
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB1:
+			{
+				std::cout << "OR A, C" << std::endl;
+				A = A | C;
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB2:
+			{
+				std::cout << "OR A, D" << std::endl;
+				A = A | D;
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB3:
+			{
+				std::cout << "OR A, E" << std::endl;
+				A = A | E;
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB4:
+			{
+				std::cout << "OR A, H" << std::endl;
+				A = A | H;
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB5:
+			{
+				std::cout << "OR A, L" << std::endl;
+				A = A | L;
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB6:
+			{
+				std::cout << "OR A, (HL)" << std::endl;
+				unsigned int address = H << 8 | L;
+				A = A | memory[address];
+				
+				setZ(A == 0);
+				break;
+			}
+			case 0xB7:
+			{
+				std::cout << "OR A, A" << std::endl;
+				A = A | A;
+				
+				setZ(A == 0);
+				break;
+			}
 			case 0xC0:
 			{
 				if (ZFlag())
