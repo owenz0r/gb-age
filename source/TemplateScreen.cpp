@@ -400,6 +400,19 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x28:
+			{
+				std::cout << "JR Z, s8" << std::endl;
+				char b2 = memory[PC++];
+				
+				if (ZFlag())
+				{
+					
+					PC += b2;
+					std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+				}
+				break;
+			}
 			case 0x2A:
 				{
 					std::cout << "LOAD A, (HL+)" << std::endl;
@@ -470,6 +483,19 @@ void TemplateScreen::Update(const double dt)
 				unsigned int address = H << 8 | L;
 				memory[address] = memory[PC++];
 				
+				break;
+			}
+			case 0x38:
+			{
+				std::cout << "JR C, s8" << std::endl;
+				char b2 = memory[PC++];
+				
+				if (CFlag())
+				{
+					
+					PC += b2;
+					std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+				}
 				break;
 			}
 			case 0x3A:
@@ -1055,6 +1081,24 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xC6:
+			{
+				unsigned char b2 = memory[PC++];
+				std::cout << "ADD d8 - " << "0x" << charToHex(b2) << std::endl;
+				
+				bool carry = ((signed int)A + (signed int)b2) > 0xFF;
+				signed char half = (0xF & (signed char)A) + (0xF & b2);
+				
+				A = A + b2;
+				
+				setZ(A == 0);
+				setN(false);
+				
+				setH(half > 0xF);
+				setC(carry);
+				
+				break;
+			}
 			case 0xCD:
 				{
 					unsigned char b2 = memory[PC++];
@@ -1107,6 +1151,24 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xD6:
+			{
+				unsigned char b2 = memory[PC++];
+				std::cout << "SUB d8 - " << "0x" << charToHex(b2) << std::endl;
+				
+				bool carry = ((signed char)A - (signed char)b2) > 0;
+				signed char half = (0xF & (signed char)A) - (0xF & b2);
+				
+				A = A - b2;
+				
+				setZ(A == 0);
+				setN(true);
+				
+				setH(half < 0);
+				setC(carry);
+				
+				break;
+			}
 			case 0xE0:
 				{
 					unsigned char b2 = memory[PC++];
@@ -1114,7 +1176,6 @@ void TemplateScreen::Update(const double dt)
 					unsigned int address = 0xFF << 8 | b2;
 					memory[address] = A;
 					
-					//setZ(PC == 0);
 					break;
 				}
 			case 0xE1:
@@ -1147,6 +1208,28 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xE6:
+			{
+				unsigned char b2 = memory[PC++];
+				std::cout << "AND d8 - " << "0x" << charToHex(b2) << std::endl;
+				
+				A = A & b2;
+				
+				setZ(A == 0);
+				setN(false);
+				setH(true);
+				setC(false);
+				
+				break;
+			}
+			case 0xF0:
+			{
+				unsigned char b2 = memory[PC++];
+				std::cout << "LD A, (a8) - " << "0xFF" << charToHex(b2) << std::endl;
+				A = memory[0xFF00 + b2];
+				
+				break;
+			}
 			case 0xF1:
 			{
 				unsigned int value = pop16();
@@ -1168,6 +1251,46 @@ void TemplateScreen::Update(const double dt)
 				unsigned int value = A << 8 | F;
 				push16(value);
 				std::cout << "PUSH AF" << std::endl;
+				
+				break;
+			}
+			case 0xF6:
+			{
+				unsigned char b2 = memory[PC++];
+				std::cout << "OR d8 - " << "0x" << charToHex(b2) << std::endl;
+				
+				A = A | b2;
+				
+				setZ(A == 0);
+				setN(false);
+				setH(false);
+				setC(false);
+				
+				break;
+			}
+			case 0xFA:
+			{
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				std::cout << "LOAD A (a16) - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+				
+				unsigned int address = b3 << 8 | b2;
+				A = memory[address];
+				
+				break;
+			}
+			case 0xFE:
+			{
+				signed char b2 = memory[PC++];
+				signed char result = (signed char)A - b2;
+				std::cout << "CP d8 - " << charToHex(result) << std::endl;
+				
+				setZ(result == 0);
+				setN(true);
+				setC(result < 0);
+				
+				signed char half = (0xF & (signed char)A) - (0xF & b2);
+				setH(half < 0);
 				
 				break;
 			}
