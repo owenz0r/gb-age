@@ -5,7 +5,6 @@
 #include "core/ResourceManager.h"
 #include "core/Utils.h"
 
-#include <_abort.h>
 #include <iostream>
 #include <sstream>
 
@@ -63,7 +62,7 @@ static bool NFlag()
 	return F & 0x02;
 }
 
-static bool setN(bool state)
+static void setN(bool state)
 {
 	state == true ? F = F | 0x02 : F = F & 0xFD;
 }
@@ -73,7 +72,7 @@ static bool HFlag()
 	return F & 0x04;
 }
 
-static bool setH(bool state)
+static void setH(bool state)
 {
 	state == true ? F = F | 0x04 : F = F & 0xFB;
 }
@@ -115,7 +114,11 @@ void TemplateScreen::Init()
 	memset(memory, 0, memory_size);
 
 	// std::string path = age::getResourcesPath().string() + "/Roms/01-special.gb";
+#ifdef WIN32
+	std::string path = "Z:/downloads/01-special.gb";
+#else
 	std::string path = "/Users/owenz0r/Downloads/01-special.gb";
+#endif
 
 	std::ifstream input(path, std::ios::binary);
 
