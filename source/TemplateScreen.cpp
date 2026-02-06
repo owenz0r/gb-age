@@ -104,6 +104,32 @@ static unsigned int pop16()
 	return b3 << 8 | b2;
 }
 
+static void inc8(unsigned char& reg)
+{
+	reg++;
+
+	setZ(reg == 0);
+	setN(false);
+	setH(reg == 0x10);
+}
+
+static void inc16(unsigned char& high, unsigned char& low)
+{
+	unsigned int value = high << 8 | low;
+	value++;
+	low = value & 0xFF;
+	high = value >> 8;
+}
+
+static void dec8(unsigned char& reg)
+{
+	reg--;
+
+	setZ(reg == 0);
+	setN(true);
+	setH((reg & 0x0F) == 0x0F);
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -182,31 +208,22 @@ void TemplateScreen::Update(const double dt)
 			case 0x03:
 			{
 				std::cout << "INC BC" << std::endl;
-				unsigned int value = B << 8 | C;
-				value++;
-				C = value & 0xFF;
-				B = value >> 8;
+				inc16(B, C);
 				
 				break;
 			}
 			case 0x04:
 			{
 				std::cout << "INC B" << std::endl;
-				
-				B++;
-				
-				setZ(B == 0);
-				setN(false);
+				inc8(B);
+
 				break;
 			}
 			case 0x05:
 			{
 				std::cout << "DEC B" << std::endl;
-				
-				B--;
-				
-				setZ(B == 0);
-				setN(false);
+				dec8(B);
+
 				break;
 			}
 			case 0x06:
@@ -219,11 +236,8 @@ void TemplateScreen::Update(const double dt)
 			case 0x0D:
 				{
 					std::cout << "DEC C" << std::endl;
-					
-					C--;
-					
-					setZ(C == 0);
-					setN(true);
+					dec8(C);
+
 					break;
 				}
 			case 0x0A:
@@ -266,31 +280,22 @@ void TemplateScreen::Update(const double dt)
 			case 0x13:
 			{
 				std::cout << "INC DE" << std::endl;
-				unsigned int value = D << 8 | E;
-				value++;
-				D = value & 0xFF;
-				E = value >> 8;
+				inc16(D, E);
 				
 				break;
 			}
 			case 0x14:
 				{
 					std::cout << "INC D" << std::endl;
-					
-					D++;
-					
-					setZ(D == 0);
-					setN(false);
+					inc8(D);
+
 					break;
 				}
 			case 0x15:
 			{
 				std::cout << "DEC D" << std::endl;
-				
-				D--;
-				
-				setZ(D == 0);
-				setN(false);
+				dec8(D);
+
 				break;
 			}
 			case 0x16:
@@ -321,11 +326,7 @@ void TemplateScreen::Update(const double dt)
 			case 0x1C:
 				{
 					std::cout << "INC E" << std::endl;
-
-					E++;
-
-					setZ(E == 0);
-					setN(false);
+					inc8(E);
 					break;
 				}
 			case 0x20:
@@ -366,31 +367,22 @@ void TemplateScreen::Update(const double dt)
 			case 0x23:
 			{
 				std::cout << "INC HL" << std::endl;
-				unsigned int value = H << 8 | L;
-				value++;
-				H = value & 0xFF;
-				L = value >> 8;
+				inc16(H, L);
 				
 				break;
 			}
 			case 0x24:
 			{
 				std::cout << "INC H" << std::endl;
-				
-				H++;
-				
-				setZ(H == 0);
-				setN(false);
+				inc8(H);
+
 				break;
 			}
 			case 0x25:
 			{
 				std::cout << "DEC H" << std::endl;
-				
-				H--;
-				
-				setZ(H == 0);
-				setN(false);
+				dec8(H);
+
 				break;
 			}
 			case 0x26:
@@ -421,6 +413,13 @@ void TemplateScreen::Update(const double dt)
 					A = memory[address++];
 					L = address & 0xFF;
 					H = address >> 8;
+
+					break;
+				}
+			case 0x2C:
+				{
+					std::cout << "INC L" << std::endl;
+					inc8(L);
 
 					break;
 				}
@@ -509,6 +508,13 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x3C:
+				{
+					std::cout << "INC A" << std::endl;
+					inc8(A);
+
+					break;
+				}
 			case 0x3E:
 				{
 					unsigned char b2 = memory[PC++];
@@ -1070,7 +1076,20 @@ void TemplateScreen::Update(const double dt)
 					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 					PC = b3 << 8 | b2;
 
-					//setZ(PC == 0);
+					break;
+				}
+			case 0xC4:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "CALL NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+
+					if (!ZFlag())
+					{
+						push16(PC);
+						PC = b3 << 8 | b2;
+					}
+
 					break;
 				}
 			case 0xC5:
@@ -1105,33 +1124,18 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b3 = memory[PC++];
 					std::cout << "CALL a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 					
-//					SP--;
-//					unsigned char byte = PC >> 8;
-//					memory[SP--] = byte;
-//					//SP--;
-//					byte = PC & 0xFF;
-//					memory[SP] = byte;
-					
 					push16(PC);
 					
 					PC = b3 << 8 | b2;
 					
-					//setZ(PC == 0);
 					break;
 				}
 			case 0xC9:
-			{
-				//unsigned char b2 = memory[SP++];
-				//unsigned char b3 = memory[SP++];
-				
+			{	
 				auto address = pop16();
-				
 				std::cout << "RET - " << "0x" << intToHex(address) << std::endl;
-				
-				//unsigned int address = b3 << 8 | b2;
 				PC = address;
 				
-				//setZ(PC == 0);
 				break;
 			}
 			case 0xD1:
@@ -1143,6 +1147,20 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xD4:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "CALL NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+
+					if (!CFlag())
+					{
+						push16(PC);
+						PC = b3 << 8 | b2;
+					}
+
+					break;
+				}
 			case 0xD5:
 			{
 				unsigned int value = D << 8 | E;
