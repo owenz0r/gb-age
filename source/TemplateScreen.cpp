@@ -130,6 +130,16 @@ static void dec8(unsigned char& reg)
 	setH((reg & 0x0F) == 0x0F);
 }
 
+static void xorA(unsigned char other)
+{
+	A = A ^ other;
+	
+	setZ(A == 0);
+	setN(false);
+	setH(false);
+	setC(false);
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -423,6 +433,13 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0x2D:
+			{
+				std::cout << "DEC L" << std::endl;
+				dec8(L);
+				
+				break;
+			}
 			case 0x31:
 				{
 					unsigned char b2 = memory[PC++];
@@ -981,6 +998,63 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xA8:
+			{
+				std::cout << "XOR B" << std::endl;
+				xorA(B);
+				
+				break;
+			}
+			case 0xA9:
+			{
+				std::cout << "XOR C" << std::endl;
+				xorA(C);
+				
+				break;
+			}
+			case 0xAA:
+			{
+				std::cout << "XOR D" << std::endl;
+				xorA(D);
+				
+				break;
+			}
+			case 0xAB:
+			{
+				std::cout << "XOR E" << std::endl;
+				xorA(E);
+				
+				break;
+			}
+			case 0xAC:
+			{
+				std::cout << "XOR H" << std::endl;
+				xorA(H);
+				
+				break;
+			}
+			case 0xAD:
+			{
+				std::cout << "XOR L" << std::endl;
+				xorA(L);
+				
+				break;
+			}
+			case 0xAE:
+			{
+				std::cout << "XOR (HL)" << std::endl;
+				unsigned int address = H << 8 | L;
+				xorA(memory[address]);
+				
+				break;
+			}
+			case 0xAF:
+			{
+				std::cout << "XOR A" << std::endl;
+				xorA(A);
+				
+				break;
+			}
 			case 0xB0:
 			{
 				std::cout << "OR A, B" << std::endl;
@@ -1237,6 +1311,13 @@ void TemplateScreen::Update(const double dt)
 				setN(false);
 				setH(true);
 				setC(false);
+				
+				break;
+			}
+			case 0xEE:
+			{
+				std::cout << "XOR d8" << std::endl;
+				xorA(memory[PC++]);
 				
 				break;
 			}
