@@ -350,6 +350,10 @@ void TemplateScreen::Update(const double dt)
 						PC += b2;
 						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
 					}
+					else
+					{
+						std::cout << "Jumping not taken" << std::endl;
+					}
 					break;
 				}
 			case 0x21:
