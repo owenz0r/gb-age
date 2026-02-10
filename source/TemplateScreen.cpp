@@ -362,6 +362,11 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b3 = memory[PC++];
 					std::cout << "LOAD HL d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 
+					if (PC == 0xc246)
+					{
+						int call_init_print = 1;
+					}
+
 					H = b3;
 					L = b2;
 
@@ -1205,7 +1210,24 @@ void TemplateScreen::Update(const double dt)
 					push16(PC);
 					
 					PC = b3 << 8 | b2;
-					
+
+					if (PC == 0xc17e)
+					{
+						int call_init_testing = 1;
+					}
+
+					if (PC == 0xc35c)
+					{
+						int wait = 1;
+					}
+
+					//0xc17e - call_init_testing
+					//0xc04d - init_testing_init_crc
+					//0xc79b - init_runtime
+					//0xc36d - console_init
+					//0xc410 - console_hide
+					//0xc35c - conosle_wait_vbl
+
 					break;
 				}
 			case 0xC9:
