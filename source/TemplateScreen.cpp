@@ -1207,6 +1207,16 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b3 = memory[PC++];
 					std::cout << "CALL a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
 					
+					if ((b3 << 8 | b2) == 0xc79b) // init runtime
+					{
+						int wait = 1;
+					}
+					
+					if (PC == 0xc0cd) // print_char
+					{
+						int wait = 1;
+					}
+					
 					push16(PC);
 					
 					PC = b3 << 8 | b2;
@@ -1216,9 +1226,34 @@ void TemplateScreen::Update(const double dt)
 						int call_init_testing = 1;
 					}
 
+					if (PC == 0xc79b)
+					{
+						int wait = 1;
+						std::cout << "***** CALL init_runtime" << std::endl;
+					}
+					
+					if (PC == 0xc36d)
+					{
+						int wait = 1;
+						std::cout << "***** CALL console_init" << std::endl;
+					}
+					
+					if (PC == 0xc410)
+					{
+						int wait = 1;
+						std::cout << "***** CALL console_hide" << std::endl;
+					}
+					
 					if (PC == 0xc35c)
 					{
 						int wait = 1;
+						std::cout << "***** CALL conosle_wait_vbl" << std::endl;
+					}
+					
+					if (PC == 0xc456)
+					{
+						int wait = 1;
+						std::cout << "***** CALL conosle_scroll_up" << std::endl;
 					}
 
 					//0xc17e - call_init_testing
@@ -1235,6 +1270,31 @@ void TemplateScreen::Update(const double dt)
 				auto address = pop16();
 				std::cout << "RET - " << "0x" << intToHex(address) << std::endl;
 				PC = address;
+				
+				if (PC == 0xc0cd)
+				{
+					int yurt = 1;
+				}
+				
+				if (PC == 0xc414) // console_wait_vbl
+				{
+					int yurt = 1;
+				}
+				
+				if (PC == 0xc370) // console_hide
+				{
+					int yurt = 1;
+				}
+				
+				if (PC == 0xc39f) // console_scroll_up
+				{
+					int yurt = 1;
+				}
+				
+				if (PC == 0xc401) // console_waitvbl
+				{
+					int yurt = 1;
+				}
 				
 				break;
 			}
@@ -1423,6 +1483,13 @@ void TemplateScreen::Update(const double dt)
 				abort();
 		}
 		//m_continue = false;
+	}
+	
+	static unsigned char FB = memory[0xFF01];
+	
+	if (FB != memory[0xFF01])
+	{
+		int yurt = 1;
 	}
 }
 
