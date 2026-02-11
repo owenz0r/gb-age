@@ -161,6 +161,51 @@ static void bitmanip(unsigned char& reg, int bit, int value)
 	}
 }
 
+static void SLA(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value << 1;
+	reg = value & 0xFF;
+	if ((value & 0x0100) == 0x0100)
+	{
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+	
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
+}
+
+static void SRA(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value >> 1;
+	
+	if (reg & 0x01)
+	{
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+	
+	if (reg & 0x80)
+	{
+		value = value | 0x80;
+	}
+	
+	reg = value & 0xFF;
+	
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
+}
+
 static void RLC(unsigned char& reg)
 {
 	unsigned int value = reg;
@@ -207,10 +252,14 @@ static void RL(unsigned char& reg)
 {
 	unsigned int value = reg;
 	value = value << 1;
+	
+	if (CFlag())
+		value = value | 0x01;
+	
 	reg = value & 0xFF;
+
 	if ((value & 0x0100) == 0x0100)
 	{
-		reg = reg | 0x01;
 		setC(true);
 	}
 	else
@@ -218,6 +267,30 @@ static void RL(unsigned char& reg)
 		setC(false);
 	}
 
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
+}
+
+static void RR(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value >> 1;
+	
+	if (CFlag())
+		value = value | 0x80;
+	
+	if (reg & 0x01)
+	{
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+	
+	reg = value & 0xFF;
+	
 	setZ(reg == 0);
 	setH(false);
 	setN(false);
@@ -1413,6 +1486,253 @@ void TemplateScreen::Update(const double dt)
 
 						////////////////////////////////////////////
 
+						case 0x10:
+						{
+							std::cout << "RL B" << std::endl;
+							RL(B);
+							
+							break;
+						}
+						case 0x11:
+						{
+							std::cout << "RL C" << std::endl;
+							RL(C);
+							
+							break;
+						}
+						case 0x12:
+						{
+							std::cout << "RL D" << std::endl;
+							RL(D);
+							
+							break;
+						}
+						case 0x13:
+						{
+							std::cout << "RL E" << std::endl;
+							RL(E);
+							
+							break;
+						}
+						case 0x14:
+						{
+							std::cout << "RL H" << std::endl;
+							RL(H);
+							
+							break;
+						}
+						case 0x15:
+						{
+							std::cout << "RL L" << std::endl;
+							RL(L);
+							
+							break;
+						}
+						case 0x16:
+						{
+							std::cout << "RL (HL)" << std::endl;
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = memory[address];
+							RL(value);
+							memory[address] = value;
+							
+							break;
+						}
+						case 0x17:
+						{
+							std::cout << "RL A" << std::endl;
+							RL(A);
+							
+							break;
+						}
+							
+						case 0x18:
+						{
+							std::cout << "RR B" << std::endl;
+							RR(B);
+							
+							break;
+						}
+						case 0x19:
+						{
+							std::cout << "RR C" << std::endl;
+							RR(C);
+							
+							break;
+						}
+						case 0x1A:
+						{
+							std::cout << "RR D" << std::endl;
+							RR(D);
+							
+							break;
+						}
+						case 0x1B:
+						{
+							std::cout << "RR E" << std::endl;
+							RR(E);
+							
+							break;
+						}
+						case 0x1C:
+						{
+							std::cout << "RR H" << std::endl;
+							RR(H);
+							
+							break;
+						}
+						case 0x1D:
+						{
+							std::cout << "RR L" << std::endl;
+							RR(L);
+							
+							break;
+						}
+						case 0x1E:
+						{
+							std::cout << "RR (HL)" << std::endl;
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = memory[address];
+							RR(value);
+							memory[address] = value;
+							
+							break;
+						}
+						case 0x1F:
+						{
+							std::cout << "RR A" << std::endl;
+							RR(A);
+							
+							break;
+						}
+							
+							////////////////////////////////////////////
+							
+						case 0x20:
+						{
+							std::cout << "SLA B" << std::endl;
+							SLA(B);
+							
+							break;
+						}
+						case 0x21:
+						{
+							std::cout << "SLA C" << std::endl;
+							SLA(C);
+							
+							break;
+						}
+						case 0x22:
+						{
+							std::cout << "SLA D" << std::endl;
+							SLA(D);
+							
+							break;
+						}
+						case 0x23:
+						{
+							std::cout << "SLA E" << std::endl;
+							SLA(E);
+							
+							break;
+						}
+						case 0x24:
+						{
+							std::cout << "SLA H" << std::endl;
+							SLA(H);
+							
+							break;
+						}
+						case 0x25:
+						{
+							std::cout << "SLA L" << std::endl;
+							SLA(L);
+							
+							break;
+						}
+						case 0x26:
+						{
+							std::cout << "SLA (HL)" << std::endl;
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = memory[address];
+							SLA(value);
+							memory[address] = value;
+							
+							break;
+						}
+						case 0x27:
+						{
+							std::cout << "SLA A" << std::endl;
+							SLA(A);
+							
+							break;
+						}
+							
+						case 0x28:
+						{
+							std::cout << "SRA B" << std::endl;
+							SRA(B);
+							
+							break;
+						}
+						case 0x29:
+						{
+							std::cout << "SRA C" << std::endl;
+							SRA(C);
+							
+							break;
+						}
+						case 0x2A:
+						{
+							std::cout << "SRA D" << std::endl;
+							SRA(D);
+							
+							break;
+						}
+						case 0x2B:
+						{
+							std::cout << "SRA E" << std::endl;
+							SRA(E);
+							
+							break;
+						}
+						case 0x2C:
+						{
+							std::cout << "SRA H" << std::endl;
+							SRA(H);
+							
+							break;
+						}
+						case 0x2D:
+						{
+							std::cout << "SRA L" << std::endl;
+							SRA(L);
+							
+							break;
+						}
+						case 0x2E:
+						{
+							std::cout << "SRA (HL)" << std::endl;
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = memory[address];
+							SRA(value);
+							memory[address] = value;
+							
+							break;
+						}
+						case 0x2F:
+						{
+							std::cout << "SRA A" << std::endl;
+							SRA(A);
+							
+							break;
+						}
+							
+							////////////////////////////////////////////
 
 						////////////////////////////////////////////
 
