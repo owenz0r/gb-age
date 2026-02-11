@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <assert.h>
 
 #define DEBUG 1
 constexpr int display_width = 160;
@@ -138,6 +139,88 @@ static void xorA(unsigned char other)
 	setN(false);
 	setH(false);
 	setC(false);
+}
+
+static void bitmanip(unsigned char& reg, int bit, int value)
+{
+	assert(bit < 8);
+	assert(value < 2);
+
+	unsigned char one = 0x01;
+	for (int i = 0; i < bit; ++i)
+		one = one << 1;
+
+	if (value == 1)
+	{
+		reg = reg | one;
+	}
+	else
+	{
+		one = ~one;
+		reg = reg & one;
+	}
+}
+
+static void RLC(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value << 1;
+	reg = value & 0xFF;
+	if ((value & 0x0100) == 0x0100)
+	{
+		reg = reg | 0x01;
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
+}
+
+static void RRC(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value >> 1;
+
+	if (reg & 0x01)
+	{
+		value = value | 0x80;
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+
+	reg = value & 0xFF;
+
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
+}
+
+static void RL(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value << 1;
+	reg = value & 0xFF;
+	if ((value & 0x0100) == 0x0100)
+	{
+		reg = reg | 0x01;
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
 }
 
 void TemplateScreen::Init()
@@ -1200,6 +1283,980 @@ void TemplateScreen::Update(const double dt)
 				setC(carry);
 				
 				break;
+			}
+			case 0xCB:
+			{
+					unsigned char b2 = memory[PC++];
+					switch (b2)
+					{
+						case 0x00:
+						{
+							std::cout << "RLC B" << std::endl;
+							RLC(B);
+
+							break;
+						}
+						case 0x01:
+							{
+								std::cout << "RLC C" << std::endl;
+								RLC(C);
+
+								break;
+							}
+						case 0x02:
+							{
+								std::cout << "RLC D" << std::endl;
+								RLC(D);
+
+								break;
+							}
+						case 0x03:
+							{
+								std::cout << "RLC E" << std::endl;
+								RLC(E);
+
+								break;
+							}
+						case 0x04:
+							{
+								std::cout << "RLC H" << std::endl;
+								RLC(H);
+
+								break;
+							}
+						case 0x05:
+							{
+								std::cout << "RLC L" << std::endl;
+								RLC(L);
+
+								break;
+							}
+						case 0x06:
+							{
+								std::cout << "RLC (HL)" << std::endl;
+								
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								RLC(value);
+								memory[address] = value;
+
+								break;
+							}
+						case 0x07:
+							{
+								std::cout << "RLC A" << std::endl;
+								RLC(A);
+
+								break;
+							}
+
+						case 0x08:
+							{
+								std::cout << "RRC B" << std::endl;
+								RRC(B);
+
+								break;
+							}
+						case 0x09:
+							{
+								std::cout << "RRC C" << std::endl;
+								RRC(C);
+
+								break;
+							}
+						case 0x0A:
+							{
+								std::cout << "RRC D" << std::endl;
+								RRC(D);
+
+								break;
+							}
+						case 0x0B:
+							{
+								std::cout << "RRC E" << std::endl;
+								RRC(E);
+
+								break;
+							}
+						case 0x0C:
+							{
+								std::cout << "RRC H" << std::endl;
+								RRC(H);
+
+								break;
+							}
+						case 0x0D:
+							{
+								std::cout << "RRC L" << std::endl;
+								RRC(L);
+
+								break;
+							}
+						case 0x0E:
+							{
+								std::cout << "RRC (HL)" << std::endl;
+
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								RRC(value);
+								memory[address] = value;
+
+								break;
+							}
+						case 0x0F:
+							{
+								std::cout << "RRC A" << std::endl;
+								RRC(A);
+
+								break;
+							}
+
+						////////////////////////////////////////////
+
+
+						////////////////////////////////////////////
+
+						case 0x80:
+						{
+							std::cout << "RES 0, B" << std::endl;
+							bitmanip(B, 0, 0);
+							break;
+						}
+						case 0x81:
+							{
+								std::cout << "RES 0, C" << std::endl;
+								bitmanip(C, 0, 0);
+								break;
+							}
+						case 0x82:
+							{
+								std::cout << "RES 0, D" << std::endl;
+								bitmanip(D, 0, 0);
+								break;
+							}
+						case 0x83:
+							{
+								std::cout << "RES 0, E" << std::endl;
+								bitmanip(E, 0, 0);
+								break;
+							}
+						case 0x84:
+							{
+								std::cout << "RES 0, H" << std::endl;
+								bitmanip(H, 0, 0);
+								break;
+							}
+						case 0x85:
+							{
+								std::cout << "RES 0, L" << std::endl;
+								bitmanip(L, 0, 0);
+								break;
+							}
+						case 0x86:
+							{
+								std::cout << "RES 0, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 0, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0x87:
+							{
+								std::cout << "RES 0, A" << std::endl;
+								bitmanip(A, 0, 0);
+								break;
+							}
+						case 0x88:
+							{
+								std::cout << "RES 1, B" << std::endl;
+								bitmanip(B, 1, 0);
+								break;
+							}
+						case 0x89:
+							{
+								std::cout << "RES 1, C" << std::endl;
+								bitmanip(C, 1, 0);
+								break;
+							}
+						case 0x8A:
+							{
+								std::cout << "RES 1, D" << std::endl;
+								bitmanip(D, 1, 0);
+								break;
+							}
+						case 0x8B:
+							{
+								std::cout << "RES 1, E" << std::endl;
+								bitmanip(E, 1, 0);
+								break;
+							}
+						case 0x8C:
+							{
+								std::cout << "RES 1, H" << std::endl;
+								bitmanip(H, 1, 0);
+								break;
+							}
+						case 0x8D:
+							{
+								std::cout << "RES 1, L" << std::endl;
+								bitmanip(L, 1, 0);
+								break;
+							}
+						case 0x8E:
+							{
+								std::cout << "RES 1, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 1, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0x8F:
+							{
+								std::cout << "RES 1, A" << std::endl;
+								bitmanip(A, 1, 0);
+								break;
+							}
+
+						///////////////////////
+
+						case 0x90:
+							{
+								std::cout << "RES 2, B" << std::endl;
+								bitmanip(B, 2, 0);
+								break;
+							}
+						case 0x91:
+							{
+								std::cout << "RES 2, C" << std::endl;
+								bitmanip(C, 2, 0);
+								break;
+							}
+						case 0x92:
+							{
+								std::cout << "RES 2, D" << std::endl;
+								bitmanip(D, 2, 0);
+								break;
+							}
+						case 0x93:
+							{
+								std::cout << "RES 2, E" << std::endl;
+								bitmanip(E, 2, 0);
+								break;
+							}
+						case 0x94:
+							{
+								std::cout << "RES 2, H" << std::endl;
+								bitmanip(H, 2, 0);
+								break;
+							}
+						case 0x95:
+							{
+								std::cout << "RES 2, L" << std::endl;
+								bitmanip(L, 2, 0);
+								break;
+							}
+						case 0x96:
+							{
+								std::cout << "RES 2, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 2, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0x97:
+							{
+								std::cout << "RES 2, A" << std::endl;
+								bitmanip(A, 2, 0);
+								break;
+							}
+						case 0x98:
+							{
+								std::cout << "RES 3, B" << std::endl;
+								bitmanip(B, 3, 0);
+								break;
+							}
+						case 0x99:
+							{
+								std::cout << "RES 3, C" << std::endl;
+								bitmanip(C, 3, 0);
+								break;
+							}
+						case 0x9A:
+							{
+								std::cout << "RES 3, D" << std::endl;
+								bitmanip(D, 3, 0);
+								break;
+							}
+						case 0x9B:
+							{
+								std::cout << "RES 3, E" << std::endl;
+								bitmanip(E, 3, 0);
+								break;
+							}
+						case 0x9C:
+							{
+								std::cout << "RES 3, H" << std::endl;
+								bitmanip(H, 3, 0);
+								break;
+							}
+						case 0x9D:
+							{
+								std::cout << "RES 3, L" << std::endl;
+								bitmanip(L, 3, 0);
+								break;
+							}
+						case 0x9E:
+							{
+								std::cout << "RES 3, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 3, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0x9F:
+							{
+								std::cout << "RES 3, A" << std::endl;
+								bitmanip(A, 3, 0);
+								break;
+							}
+
+						///////////////////////
+
+						case 0xA0:
+							{
+								std::cout << "RES 4, B" << std::endl;
+								bitmanip(B, 4, 0);
+								break;
+							}
+						case 0xA1:
+							{
+								std::cout << "RES 4, C" << std::endl;
+								bitmanip(C, 4, 0);
+								break;
+							}
+						case 0xA2:
+							{
+								std::cout << "RES 4, D" << std::endl;
+								bitmanip(D, 4, 0);
+								break;
+							}
+						case 0xA3:
+							{
+								std::cout << "RES 4, E" << std::endl;
+								bitmanip(E, 4, 0);
+								break;
+							}
+						case 0xA4:
+							{
+								std::cout << "RES 4, H" << std::endl;
+								bitmanip(H, 4, 0);
+								break;
+							}
+						case 0xA5:
+							{
+								std::cout << "RES 4, L" << std::endl;
+								bitmanip(L, 4, 0);
+								break;
+							}
+						case 0xA6:
+							{
+								std::cout << "RES 4, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 4, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0xA7:
+							{
+								std::cout << "RES 4, A" << std::endl;
+								bitmanip(A, 4, 0);
+								break;
+							}
+						case 0xA8:
+							{
+								std::cout << "RES 5, B" << std::endl;
+								bitmanip(B, 5, 0);
+								break;
+							}
+						case 0xA9:
+							{
+								std::cout << "RES 5, C" << std::endl;
+								bitmanip(C, 5, 0);
+								break;
+							}
+						case 0xAA:
+							{
+								std::cout << "RES 5, D" << std::endl;
+								bitmanip(D, 5, 0);
+								break;
+							}
+						case 0xAB:
+							{
+								std::cout << "RES 5, E" << std::endl;
+								bitmanip(E, 5, 0);
+								break;
+							}
+						case 0xAC:
+							{
+								std::cout << "RES 5, H" << std::endl;
+								bitmanip(H, 5, 0);
+								break;
+							}
+						case 0xAD:
+							{
+								std::cout << "RES 5, L" << std::endl;
+								bitmanip(L, 5, 0);
+								break;
+							}
+						case 0xAE:
+							{
+								std::cout << "RES 5, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 5, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0xAF:
+							{
+								std::cout << "RES 5, A" << std::endl;
+								bitmanip(A, 5, 0);
+								break;
+							}
+
+							///////////////////////
+
+						case 0xB0:
+							{
+								std::cout << "RES 6, B" << std::endl;
+								bitmanip(B, 6, 0);
+								break;
+							}
+						case 0xB1:
+							{
+								std::cout << "RES 6, C" << std::endl;
+								bitmanip(C, 6, 0);
+								break;
+							}
+						case 0xB2:
+							{
+								std::cout << "RES 6, D" << std::endl;
+								bitmanip(D, 6, 0);
+								break;
+							}
+						case 0xB3:
+							{
+								std::cout << "RES 6, E" << std::endl;
+								bitmanip(E, 6, 0);
+								break;
+							}
+						case 0xB4:
+							{
+								std::cout << "RES 6, H" << std::endl;
+								bitmanip(H, 6, 0);
+								break;
+							}
+						case 0xB5:
+							{
+								std::cout << "RES 6, L" << std::endl;
+								bitmanip(L, 6, 0);
+								break;
+							}
+						case 0xB6:
+							{
+								std::cout << "RES 6, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 6, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0xB7:
+							{
+								std::cout << "RES 6, A" << std::endl;
+								bitmanip(A, 6, 0);
+								break;
+							}
+						case 0xB8:
+							{
+								std::cout << "RES 7, B" << std::endl;
+								bitmanip(B, 7, 0);
+								break;
+							}
+						case 0xB9:
+							{
+								std::cout << "RES 7, C" << std::endl;
+								bitmanip(C, 7, 0);
+								break;
+							}
+						case 0xBA:
+							{
+								std::cout << "RES 7, D" << std::endl;
+								bitmanip(D, 7, 0);
+								break;
+							}
+						case 0xBB:
+							{
+								std::cout << "RES 7, E" << std::endl;
+								bitmanip(E, 7, 0);
+								break;
+							}
+						case 0xBC:
+							{
+								std::cout << "RES 7, H" << std::endl;
+								bitmanip(H, 7, 0);
+								break;
+							}
+						case 0xBD:
+							{
+								std::cout << "RES 7, L" << std::endl;
+								bitmanip(L, 7, 0);
+								break;
+							}
+						case 0xBE:
+							{
+								std::cout << "RES 7, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 7, 0);
+								memory[address] = value;
+								break;
+							}
+						case 0xBF:
+							{
+								std::cout << "RES 7, A" << std::endl;
+								bitmanip(A, 7, 0);
+								break;
+							}
+
+						////////////////////////////////
+
+						////////////////////////////////
+
+						case 0xC0:
+							{
+								std::cout << "SET 0, B" << std::endl;
+								bitmanip(B, 0, 1);
+								break;
+							}
+						case 0xC1:
+							{
+								std::cout << "SET 0, C" << std::endl;
+								bitmanip(C, 0, 1);
+								break;
+							}
+						case 0xC2:
+							{
+								std::cout << "SET 0, D" << std::endl;
+								bitmanip(D, 0, 1);
+								break;
+							}
+						case 0xC3:
+							{
+								std::cout << "SET 0, E" << std::endl;
+								bitmanip(E, 0, 1);
+								break;
+							}
+						case 0xC4:
+							{
+								std::cout << "SET 0, H" << std::endl;
+								bitmanip(H, 0, 1);
+								break;
+							}
+						case 0xC5:
+							{
+								std::cout << "SET 0, L" << std::endl;
+								bitmanip(L, 0, 1);
+								break;
+							}
+						case 0xC6:
+							{
+								std::cout << "SET 0, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 0, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xC7:
+							{
+								std::cout << "SET 0, A" << std::endl;
+								bitmanip(A, 0, 1);
+								break;
+							}
+						case 0xC8:
+							{
+								std::cout << "SET 1, B" << std::endl;
+								bitmanip(B, 1, 1);
+								break;
+							}
+						case 0xC9:
+							{
+								std::cout << "SET 1, C" << std::endl;
+								bitmanip(C, 1, 1);
+								break;
+							}
+						case 0xCA:
+							{
+								std::cout << "SET 1, D" << std::endl;
+								bitmanip(D, 1, 1);
+								break;
+							}
+						case 0xCB:
+							{
+								std::cout << "SET 1, E" << std::endl;
+								bitmanip(E, 1, 1);
+								break;
+							}
+						case 0xCC:
+							{
+								std::cout << "SET 1, H" << std::endl;
+								bitmanip(H, 1, 1);
+								break;
+							}
+						case 0xCD:
+							{
+								std::cout << "SET 1, L" << std::endl;
+								bitmanip(L, 1, 1);
+								break;
+							}
+						case 0xCE:
+							{
+								std::cout << "SET 1, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 1, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xCF:
+							{
+								std::cout << "SET 1, A" << std::endl;
+								bitmanip(A, 1, 1);
+								break;
+							}
+
+							///////////////////////
+
+						case 0xD0:
+							{
+								std::cout << "SET 2, B" << std::endl;
+								bitmanip(B, 2, 1);
+								break;
+							}
+						case 0xD1:
+							{
+								std::cout << "SET 2, C" << std::endl;
+								bitmanip(C, 2, 1);
+								break;
+							}
+						case 0xD2:
+							{
+								std::cout << "SET 2, D" << std::endl;
+								bitmanip(D, 2, 1);
+								break;
+							}
+						case 0xD3:
+							{
+								std::cout << "SET 2, E" << std::endl;
+								bitmanip(E, 2, 1);
+								break;
+							}
+						case 0xD4:
+							{
+								std::cout << "SET 2, H" << std::endl;
+								bitmanip(H, 2, 1);
+								break;
+							}
+						case 0xD5:
+							{
+								std::cout << "SET 2, L" << std::endl;
+								bitmanip(L, 2, 1);
+								break;
+							}
+						case 0xD6:
+							{
+								std::cout << "SET 2, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 2, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xD7:
+							{
+								std::cout << "SET 2, A" << std::endl;
+								bitmanip(A, 2, 1);
+								break;
+							}
+						case 0xD8:
+							{
+								std::cout << "SET 3, B" << std::endl;
+								bitmanip(B, 3, 1);
+								break;
+							}
+						case 0xD9:
+							{
+								std::cout << "SET 3, C" << std::endl;
+								bitmanip(C, 3, 1);
+								break;
+							}
+						case 0xDA:
+							{
+								std::cout << "SET 3, D" << std::endl;
+								bitmanip(D, 3, 1);
+								break;
+							}
+						case 0xDB:
+							{
+								std::cout << "SET 3, E" << std::endl;
+								bitmanip(E, 3, 1);
+								break;
+							}
+						case 0xDC:
+							{
+								std::cout << "SET 3, H" << std::endl;
+								bitmanip(H, 3, 1);
+								break;
+							}
+						case 0xDD:
+							{
+								std::cout << "SET 3, L" << std::endl;
+								bitmanip(L, 3, 1);
+								break;
+							}
+						case 0xDE:
+							{
+								std::cout << "SET 3, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 3, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xDF:
+							{
+								std::cout << "SET 3, A" << std::endl;
+								bitmanip(A, 3, 1);
+								break;
+							}
+
+							///////////////////////
+
+						case 0xE0:
+							{
+								std::cout << "SET 4, B" << std::endl;
+								bitmanip(B, 4, 1);
+								break;
+							}
+						case 0xE1:
+							{
+								std::cout << "SET 4, C" << std::endl;
+								bitmanip(C, 4, 1);
+								break;
+							}
+						case 0xE2:
+							{
+								std::cout << "SET 4, D" << std::endl;
+								bitmanip(D, 4, 1);
+								break;
+							}
+						case 0xE3:
+							{
+								std::cout << "SET 4, E" << std::endl;
+								bitmanip(E, 4, 1);
+								break;
+							}
+						case 0xE4:
+							{
+								std::cout << "SET 4, H" << std::endl;
+								bitmanip(H, 4, 1);
+								break;
+							}
+						case 0xE5:
+							{
+								std::cout << "SET 4, L" << std::endl;
+								bitmanip(L, 4, 1);
+								break;
+							}
+						case 0xE6:
+							{
+								std::cout << "SET 4, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 4, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xE7:
+							{
+								std::cout << "SET 4, A" << std::endl;
+								bitmanip(A, 4, 1);
+								break;
+							}
+						case 0xE8:
+							{
+								std::cout << "SET 5, B" << std::endl;
+								bitmanip(B, 5, 1);
+								break;
+							}
+						case 0xE9:
+							{
+								std::cout << "SET 5, C" << std::endl;
+								bitmanip(C, 5, 1);
+								break;
+							}
+						case 0xEA:
+							{
+								std::cout << "SET 5, D" << std::endl;
+								bitmanip(D, 5, 1);
+								break;
+							}
+						case 0xEB:
+							{
+								std::cout << "SET 5, E" << std::endl;
+								bitmanip(E, 5, 1);
+								break;
+							}
+						case 0xEC:
+							{
+								std::cout << "SET 5, H" << std::endl;
+								bitmanip(H, 5, 1);
+								break;
+							}
+						case 0xED:
+							{
+								std::cout << "SET 5, L" << std::endl;
+								bitmanip(L, 5, 1);
+								break;
+							}
+						case 0xEE:
+							{
+								std::cout << "SET 5, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 5, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xEF:
+							{
+								std::cout << "SET 5, A" << std::endl;
+								bitmanip(A, 5, 1);
+								break;
+							}
+
+							///////////////////////
+
+						case 0xF0:
+							{
+								std::cout << "SET 6, B" << std::endl;
+								bitmanip(B, 6, 1);
+								break;
+							}
+						case 0xF1:
+							{
+								std::cout << "SET 6, C" << std::endl;
+								bitmanip(C, 6, 1);
+								break;
+							}
+						case 0xF2:
+							{
+								std::cout << "SET 6, D" << std::endl;
+								bitmanip(D, 6, 1);
+								break;
+							}
+						case 0xF3:
+							{
+								std::cout << "SET 6, E" << std::endl;
+								bitmanip(E, 6, 1);
+								break;
+							}
+						case 0xF4:
+							{
+								std::cout << "SET 6, H" << std::endl;
+								bitmanip(H, 6, 1);
+								break;
+							}
+						case 0xF5:
+							{
+								std::cout << "SET 6, L" << std::endl;
+								bitmanip(L, 6, 1);
+								break;
+							}
+						case 0xF6:
+							{
+								std::cout << "SET 6, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 6, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xF7:
+							{
+								std::cout << "SET 6, A" << std::endl;
+								bitmanip(A, 6, 1);
+								break;
+							}
+						case 0xF8:
+							{
+								std::cout << "SET 7, B" << std::endl;
+								bitmanip(B, 7, 1);
+								break;
+							}
+						case 0xF9:
+							{
+								std::cout << "SET 7, C" << std::endl;
+								bitmanip(C, 7, 1);
+								break;
+							}
+						case 0xFA:
+							{
+								std::cout << "SET 7, D" << std::endl;
+								bitmanip(D, 7, 1);
+								break;
+							}
+						case 0xFB:
+							{
+								std::cout << "SET 7, E" << std::endl;
+								bitmanip(E, 7, 1);
+								break;
+							}
+						case 0xFC:
+							{
+								std::cout << "SET 7, H" << std::endl;
+								bitmanip(H, 7, 1);
+								break;
+							}
+						case 0xFD:
+							{
+								std::cout << "SET 7, L" << std::endl;
+								bitmanip(L, 7, 1);
+								break;
+							}
+						case 0xFE:
+							{
+								std::cout << "SET 7, (HL)" << std::endl;
+								unsigned int address = H << 8 | L;
+								unsigned char value = memory[address];
+								bitmanip(value, 7, 1);
+								memory[address] = value;
+								break;
+							}
+						case 0xFF:
+							{
+								std::cout << "SET 7, A" << std::endl;
+								bitmanip(A, 7, 1);
+								break;
+							}
+					}
+					break;
 			}
 			case 0xCD:
 				{
