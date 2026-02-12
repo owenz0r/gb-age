@@ -131,6 +131,40 @@ static void dec8(unsigned char& reg)
 	setH((reg & 0x0F) == 0x0F);
 }
 
+static void add16(unsigned char& h1,
+				  unsigned char& l1,
+				  unsigned int& v2)
+{
+	unsigned int v1 = h1 << 8 | l1;
+	unsigned int result = v1 + v2;
+	
+	setN(false);
+	setC(result > 0xFFFF);
+	signed char half = (0xF & (signed char)h1) + ((0xF00 & v2) >> 8);
+	setH(half > 0xF);
+	
+	h1 = (result & 0xFF00) >> 8;
+	l1 = result & 0xFF;
+}
+
+static void add16(unsigned char& h1,
+				  unsigned char& l1,
+				  unsigned char& h2,
+				  unsigned char& l2)
+{
+	unsigned int v1 = h1 << 8 | l1;
+	unsigned int v2 = h2 << 8 | l2;
+	unsigned int result = v1 + v2;
+	
+	setN(false);
+	setC(result > 0xFFFF);
+	signed char half = (0xF & (signed char)h1) + (0xF & h2);
+	setH(half > 0xF);
+	
+	h1 = (result & 0xFF00) >> 8;
+	l1 = result & 0xFF;
+}
+
 static void xorA(unsigned char other)
 {
 	A = A ^ other;
@@ -399,6 +433,13 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x09:
+			{
+				std::cout << "ADD HL, BC" << std::endl;
+				add16(H, L, B, C);
+				
+				break;
+			}
 			case 0x0D:
 				{
 					std::cout << "DEC C" << std::endl;
@@ -481,6 +522,13 @@ void TemplateScreen::Update(const double dt)
 					
 					break;
 				}
+			case 0x19:
+			{
+				std::cout << "ADD HL, DE" << std::endl;
+				add16(H, L, D, E);
+				
+				break;
+			}
 			case 0x1A:
 			{
 				unsigned int address = D << 8 | E;
@@ -495,6 +543,13 @@ void TemplateScreen::Update(const double dt)
 					inc8(E);
 					break;
 				}
+			case 0x1D:
+			{
+				std::cout << "DEC E" << std::endl;
+				dec8(E);
+				
+				break;
+			}
 			case 0x1F:
 				{
 					std::cout << "RRA" << std::endl;
@@ -607,6 +662,14 @@ void TemplateScreen::Update(const double dt)
 				}
 				break;
 			}
+			case 0x29:
+			{
+				std::cout << "ADD HL, HL" << std::endl;
+				add16(H, L, H, L);
+				
+				break;
+			}
+				
 			case 0x2A:
 				{
 					std::cout << "LOAD A, (HL+)" << std::endl;
@@ -724,6 +787,13 @@ void TemplateScreen::Update(const double dt)
 				}
 				break;
 			}
+			case 0x39:
+			{
+				std::cout << "ADD HL, SP" << std::endl;
+				add16(H, L, SP);
+				
+				break;
+			}
 			case 0x3A:
 			{
 				std::cout << "LOAD A, (HL+)" << std::endl;
@@ -742,6 +812,13 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0x3D:
+			{
+				std::cout << "DEC A" << std::endl;
+				dec8(A);
+				
+				break;
+			}
 			case 0x3E:
 				{
 					unsigned char b2 = memory[PC++];
@@ -2692,12 +2769,13 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b2 = memory[PC++];
 					std::cout << "ADC A, d8" << "0x" << charToHex(b2) << std::endl;
 
-					unsigned int result = (A + b2 + CFlag() ? 1 : 0);
+					signed char half = (0xF & (signed char)A) + (0xF & b2);
+					if (CFlag())
+						half++;
+					setH(half > 0xF);
+					unsigned int result = (A + b2 + (CFlag() ? 1 : 0));
 					setC(result > 0xFF);
 					A = result;
-
-					assert(false);
-					// setH flag correctly
 
 					setZ(A == 0);
 					setN(false);
@@ -2736,6 +2814,20 @@ void TemplateScreen::Update(const double dt)
 					int yurt = 1;
 				}
 				
+				break;
+			}
+			case 0xD0:
+			{
+				if (CFlag())
+				{
+					//PC++;
+					std::cout << "RET NC - No jump" << std::endl;
+				}
+				else
+				{
+					PC = pop16();
+					std::cout << "RET NC - " << "0x" << intToHex(PC) << std::endl;
+				}
 				break;
 			}
 			case 0xD1:
