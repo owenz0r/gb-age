@@ -495,6 +495,33 @@ void TemplateScreen::Update(const double dt)
 					inc8(E);
 					break;
 				}
+			case 0x1F:
+				{
+					std::cout << "RRA" << std::endl;
+					
+					unsigned int value = A;
+					value = value >> 1;
+
+					if (CFlag())
+						value = value | 0x80;
+
+					if (A & 0x01)
+					{
+						setC(true);
+					}
+					else
+					{
+						setC(false);
+					}
+
+					A = value & 0xFF;
+
+					setZ(false);
+					setH(false);
+					setN(false);
+
+					break;
+				}
 			case 0x20:
 				{
 					std::cout << "JR NZ, s8" << std::endl;
@@ -605,6 +632,24 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x30:
+				{
+					std::cout << "JR NC, s8" << std::endl;
+					char b2 = memory[PC++];
+
+					if (!CFlag())
+					{
+
+						PC += b2;
+						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+					}
+					else
+					{
+						std::cout << "Jumping not taken" << std::endl;
+					}
+					break;
+				}
+
 			case 0x31:
 				{
 					unsigned char b2 = memory[PC++];
@@ -2639,6 +2684,24 @@ void TemplateScreen::Update(const double dt)
 					//0xc36d - console_init
 					//0xc410 - console_hide
 					//0xc35c - conosle_wait_vbl
+
+					break;
+				}
+			case 0xCE:
+				{
+					unsigned char b2 = memory[PC++];
+					std::cout << "ADC A, d8" << "0x" << charToHex(b2) << std::endl;
+
+					unsigned int result = (A + b2 + CFlag() ? 1 : 0);
+					setC(result > 0xFF);
+					A = result;
+
+					assert(false);
+					// setH flag correctly
+
+					setZ(A == 0);
+					setN(false);
+
 
 					break;
 				}
