@@ -1430,6 +1430,16 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xC2:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "JP NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					if (!ZFlag())
+						PC = b3 << 8 | b2;
+
+					break;
+				}
 			case 0xC3:
 				{
 					unsigned char b2 = memory[PC++];
@@ -2839,6 +2849,16 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xD2:
+				{
+					unsigned char b2 = memory[PC++];
+					unsigned char b3 = memory[PC++];
+					std::cout << "JP NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					if (!CFlag())
+						PC = b3 << 8 | b2;
+
+					break;
+				}
 			case 0xD4:
 				{
 					unsigned char b2 = memory[PC++];
@@ -2897,6 +2917,14 @@ void TemplateScreen::Update(const double dt)
 					//PC++;
 					
 					//setZ(PC == 0);
+					break;
+				}
+			case 0xE9:
+				{
+					std::cout << "JP HL" << std::endl;
+					unsigned int address = H << 8 | L;
+					PC = address;
+
 					break;
 				}
 			case 0xEA:
