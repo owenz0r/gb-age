@@ -9,6 +9,14 @@
 #include <sstream>
 #include <assert.h>
 
+//#define DEBUG_PRINT
+
+#ifdef DEBUG_PRINT
+#define DEBUG_LOG(x) std::cout << x << std::endl
+#else
+#define DEBUG_LOG(x)
+#endif
+
 #define DEBUG 1
 constexpr int display_width = 160;
 constexpr int display_height = 144;
@@ -33,6 +41,11 @@ static unsigned char D;
 static unsigned char E;
 static unsigned char H;
 static unsigned char L;
+
+constexpr unsigned int SB = 0xFF01;
+constexpr unsigned int SC = 0xFF02;
+
+static std::string console = "";
 
 static std::string charToHex(unsigned char c)
 {
@@ -330,6 +343,17 @@ static void RR(unsigned char& reg)
 	setN(false);
 }
 
+static void compareWithA(unsigned char &value)
+{
+	unsigned char result = A - value;
+	setZ(result == 0);
+	setN(true);
+	
+	signed char half = (0xF & (signed char)A) - (0xF & value);
+	setH(half < 0);
+	setC(value > A);
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -358,11 +382,11 @@ void TemplateScreen::Init()
 
 		PEND = program_address + size;
 		m_initialized = true;
-		std::cout << "Success" << std::endl;
+		DEBUG_LOG("Success");
 	}
 	else
 	{
-		std::cout << "No ROM found - " << path << std::endl;
+		DEBUG_LOG("No ROM found - " << path);
 	}
 }
 
@@ -371,26 +395,34 @@ void TemplateScreen::Update(const double dt)
 	if (m_continue)
 	{
 		static int count = 0;
-		std::cout << std::dec << count++ << " PC 0x" << std::hex << PC << " - ";
+		DEBUG_LOG(std::dec << count++ << " PC 0x" << std::hex << PC << " - ");
 		unsigned char b1 = memory[PC++];
 
 		// unsigned char n1 = (b1 >> 4) & 0x0F;
 		// unsigned char n2 = b1 & 0x0F;
 
-		std::cout << std::hex << int(b1) << std::endl;
+		DEBUG_LOG(std::hex << int(b1));
+		
+		static int icount = 0;
+		DEBUG_LOG("instruction - " << std::dec << icount++);
 
 		switch (b1)
 		{
 			case 0x00:
 				{
-					std::cout << "NOP" << std::endl;
+					DEBUG_LOG("NOP");
 					break;
 				}
 			case 0x01:
 			{
 				unsigned char b2 = memory[PC++];
 				unsigned char b3 = memory[PC++];
-				std::cout << "LOAD BC d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+				DEBUG_LOG("LOAD BC d16 - " << "0x" << charToHex(b3) << charToHex(b2));
+				
+				if (b3 == 0x12)
+				{
+					int yurt = 1;
+				}
 				
 				B = b3;
 				C = b2;
@@ -399,7 +431,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0x02:
 				{
-					std::cout << "LD (BC), A" << std::endl;
+					DEBUG_LOG("LD (BC), A");
 					unsigned int address = B << 8 | C;
 					memory[address] = A;
 					
@@ -407,42 +439,49 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x03:
 			{
-				std::cout << "INC BC" << std::endl;
+				DEBUG_LOG("INC BC");
 				inc16(B, C);
 				
 				break;
 			}
 			case 0x04:
 			{
-				std::cout << "INC B" << std::endl;
+				DEBUG_LOG("INC B");
 				inc8(B);
 
 				break;
 			}
 			case 0x05:
 			{
-				std::cout << "DEC B" << std::endl;
+				DEBUG_LOG("DEC B");
 				dec8(B);
 
 				break;
 			}
 			case 0x06:
 			{
-				std::cout << "LD B, d8" << std::endl;
+				DEBUG_LOG("LD B, d8");
 				B = memory[PC++];
 				
 				break;
 			}
 			case 0x09:
 			{
-				std::cout << "ADD HL, BC" << std::endl;
+				DEBUG_LOG("ADD HL, BC");
 				add16(H, L, B, C);
+				
+				break;
+			}
+			case 0x0C:
+			{
+				DEBUG_LOG("INC C");
+				inc8(C);
 				
 				break;
 			}
 			case 0x0D:
 				{
-					std::cout << "DEC C" << std::endl;
+					DEBUG_LOG("DEC C");
 					dec8(C);
 
 					break;
@@ -451,23 +490,30 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = B << 8 | C;
 				A = memory[address];
-				std::cout << "LOAD A, (BC) - " << charToHex(address) << std::endl;
+				DEBUG_LOG("LOAD A, (BC) - " << charToHex(address));
 				
 				break;
 			}
 			case 0x0E:
 				{
 					unsigned char b2 = memory[PC++];
-					std::cout << "LOAD C, d8 - " << charToHex(b2) << std::endl;
+					DEBUG_LOG("LOAD C, d8 - " << charToHex(b2));
 					C = b2;
 
 					break;
 				}
+			case 0x0F:
+			{
+				DEBUG_LOG("RRCA");
+				RRC(A);
+				
+				break;
+			}
 			case 0x11:
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "LOAD DE d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("LOAD DE d16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					D = b3;
 					E = b2;
@@ -476,7 +522,7 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x12:
 				{
-					std::cout << "LOAD (DE), A" << std::endl;
+					DEBUG_LOG("LOAD (DE), A");
 
 					unsigned int address = D << 8 | E;
 					memory[address] = A;
@@ -486,45 +532,45 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x13:
 			{
-				std::cout << "INC DE" << std::endl;
+				DEBUG_LOG("INC DE");
 				inc16(D, E);
 				
 				break;
 			}
 			case 0x14:
 				{
-					std::cout << "INC D" << std::endl;
+					DEBUG_LOG("INC D");
 					inc8(D);
 
 					break;
 				}
 			case 0x15:
 			{
-				std::cout << "DEC D" << std::endl;
+				DEBUG_LOG("DEC D");
 				dec8(D);
 
 				break;
 			}
 			case 0x16:
 			{
-				std::cout << "LD D, d8" << std::endl;
+				DEBUG_LOG("LD D, d8");
 				D = memory[PC++];
 				
 				break;
 			}
 			case 0x18:
 				{
-					std::cout << "JR s8" << std::endl;
+					DEBUG_LOG("JR s8");
 					char b2 = memory[PC++];
 					
 					PC += b2;
-					std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 					
 					break;
 				}
 			case 0x19:
 			{
-				std::cout << "ADD HL, DE" << std::endl;
+				DEBUG_LOG("ADD HL, DE");
 				add16(H, L, D, E);
 				
 				break;
@@ -533,26 +579,26 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = D << 8 | E;
 				A = memory[address];
-				std::cout << "LOAD A, (DE) - " << charToHex(address) << std::endl;
+				DEBUG_LOG("LOAD A, (DE) - " << charToHex(address));
 				
 				break;
 			}
 			case 0x1C:
 				{
-					std::cout << "INC E" << std::endl;
+					DEBUG_LOG("INC E");
 					inc8(E);
 					break;
 				}
 			case 0x1D:
 			{
-				std::cout << "DEC E" << std::endl;
+				DEBUG_LOG("DEC E");
 				dec8(E);
 				
 				break;
 			}
 			case 0x1F:
 				{
-					std::cout << "RRA" << std::endl;
+					DEBUG_LOG("RRA");
 					
 					unsigned int value = A;
 					value = value >> 1;
@@ -579,18 +625,18 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x20:
 				{
-					std::cout << "JR NZ, s8" << std::endl;
+					DEBUG_LOG("JR NZ, s8");
 					char b2 = memory[PC++];
 					
 					if (!ZFlag())
 					{
 						
 						PC += b2;
-						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+						DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 					}
 					else
 					{
-						std::cout << "Jumping not taken" << std::endl;
+						DEBUG_LOG("Jumping not taken");
 					}
 					break;
 				}
@@ -598,7 +644,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "LOAD HL d16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("LOAD HL d16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					if (PC == 0xc246)
 					{
@@ -612,7 +658,7 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x22:
 				{
-					std::cout << "LD (HL+), A" << std::endl;
+					DEBUG_LOG("LD (HL+), A");
 					unsigned int address = H << 8 | L;
 					memory[address++] = A;
 					
@@ -623,48 +669,48 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x23:
 			{
-				std::cout << "INC HL" << std::endl;
+				DEBUG_LOG("INC HL");
 				inc16(H, L);
 				
 				break;
 			}
 			case 0x24:
 			{
-				std::cout << "INC H" << std::endl;
+				DEBUG_LOG("INC H");
 				inc8(H);
 
 				break;
 			}
 			case 0x25:
 			{
-				std::cout << "DEC H" << std::endl;
+				DEBUG_LOG("DEC H");
 				dec8(H);
 
 				break;
 			}
 			case 0x26:
 			{
-				std::cout << "LD H, d8" << std::endl;
+				DEBUG_LOG("LD H, d8");
 				H = memory[PC++];
 				
 				break;
 			}
 			case 0x28:
 			{
-				std::cout << "JR Z, s8" << std::endl;
+				DEBUG_LOG("JR Z, s8");
 				char b2 = memory[PC++];
 				
 				if (ZFlag())
 				{
 					
 					PC += b2;
-					std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 				}
 				break;
 			}
 			case 0x29:
 			{
-				std::cout << "ADD HL, HL" << std::endl;
+				DEBUG_LOG("ADD HL, HL");
 				add16(H, L, H, L);
 				
 				break;
@@ -672,7 +718,7 @@ void TemplateScreen::Update(const double dt)
 				
 			case 0x2A:
 				{
-					std::cout << "LOAD A, (HL+)" << std::endl;
+					DEBUG_LOG("LOAD A, (HL+)");
 
 					unsigned int address = H << 8 | L;
 					A = memory[address++];
@@ -683,32 +729,32 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x2C:
 				{
-					std::cout << "INC L" << std::endl;
+					DEBUG_LOG("INC L");
 					inc8(L);
 
 					break;
 				}
 			case 0x2D:
 			{
-				std::cout << "DEC L" << std::endl;
+				DEBUG_LOG("DEC L");
 				dec8(L);
 				
 				break;
 			}
 			case 0x30:
 				{
-					std::cout << "JR NC, s8" << std::endl;
+					DEBUG_LOG("JR NC, s8");
 					char b2 = memory[PC++];
 
 					if (!CFlag())
 					{
 
 						PC += b2;
-						std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+						DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 					}
 					else
 					{
-						std::cout << "Jumping not taken" << std::endl;
+						DEBUG_LOG("Jumping not taken");
 					}
 					break;
 				}
@@ -718,7 +764,7 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
 					
-					std::cout << "LOAD SP, d16" << std::endl;
+					DEBUG_LOG("LOAD SP, d16");
 					
 					SP = b3 << 8 | b2;
 					
@@ -727,7 +773,7 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x32:
 			{
-				std::cout << "LD (HL-), A" << std::endl;
+				DEBUG_LOG("LD (HL-), A");
 				unsigned int address = H << 8 | L;
 				memory[address--] = A;
 				
@@ -738,14 +784,14 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0x33:
 			{
-				std::cout << "INC SP" << std::endl;
+				DEBUG_LOG("INC SP");
 				SP++;
 				
 				break;
 			}
 			case 0x34:
 			{
-				std::cout << "INC (HL)" << std::endl;
+				DEBUG_LOG("INC (HL)");
 				
 				unsigned int address = H << 8 | L;
 				memory[address]++;
@@ -756,7 +802,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0x35:
 			{
-				std::cout << "DEC (HL)" << std::endl;
+				DEBUG_LOG("DEC (HL)");
 				
 				unsigned int address = H << 8 | L;
 				memory[address]--;
@@ -767,7 +813,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0x36:
 			{
-				std::cout << "LD (HL), d8" << std::endl;
+				DEBUG_LOG("LD (HL), d8");
 				
 				unsigned int address = H << 8 | L;
 				memory[address] = memory[PC++];
@@ -776,27 +822,27 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0x38:
 			{
-				std::cout << "JR C, s8" << std::endl;
+				DEBUG_LOG("JR C, s8");
 				char b2 = memory[PC++];
 				
 				if (CFlag())
 				{
 					
 					PC += b2;
-					std::cout << "Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")" << std::endl;
+					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 				}
 				break;
 			}
 			case 0x39:
 			{
-				std::cout << "ADD HL, SP" << std::endl;
+				DEBUG_LOG("ADD HL, SP");
 				add16(H, L, SP);
 				
 				break;
 			}
 			case 0x3A:
 			{
-				std::cout << "LOAD A, (HL+)" << std::endl;
+				DEBUG_LOG("LOAD A, (HL+)");
 				
 				unsigned int address = H << 8 | L;
 				A = memory[address--];
@@ -807,14 +853,14 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0x3C:
 				{
-					std::cout << "INC A" << std::endl;
+					DEBUG_LOG("INC A");
 					inc8(A);
 
 					break;
 				}
 			case 0x3D:
 			{
-				std::cout << "DEC A" << std::endl;
+				DEBUG_LOG("DEC A");
 				dec8(A);
 				
 				break;
@@ -823,7 +869,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					
-					std::cout << "LOAD A, d8" << std::endl;
+					DEBUG_LOG("LOAD A, d8");
 					
 					A = b2;
 					
@@ -833,42 +879,42 @@ void TemplateScreen::Update(const double dt)
 			case 0x40:
 				{
 					B = B;
-					std::cout << "LOAD B, B" << std::endl;
+					DEBUG_LOG("LOAD B, B");
 					
 					break;
 				}
 			case 0x41:
 				{
 					B = C;
-					std::cout << "LOAD B, C" << std::endl;
+					DEBUG_LOG("LOAD B, C");
 					
 					break;
 				}
 			case 0x42:
 				{
 					B = D;
-					std::cout << "LOAD B, D" << std::endl;
+					DEBUG_LOG("LOAD B, D");
 					
 					break;
 				}
 			case 0x43:
 				{
 					B = E;
-					std::cout << "LOAD B, E" << std::endl;
+					DEBUG_LOG("LOAD B, E");
 					
 					break;
 				}
 			case 0x44:
 				{
 					B = H;
-					std::cout << "LOAD B, H" << std::endl;
+					DEBUG_LOG("LOAD B, H");
 					
 					break;
 				}
 			case 0x45:
 				{
 					B = L;
-					std::cout << "LOAD B, L" << std::endl;
+					DEBUG_LOG("LOAD B, L");
 					
 					break;
 				}
@@ -876,56 +922,56 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned int address = H << 8 | L;
 					B = memory[address];
-					std::cout << "LOAD B, (HL)" << std::endl;
+					DEBUG_LOG("LOAD B, (HL)");
 
 					break;
 				}
 			case 0x47:
 				{
 					B = A;
-					std::cout << "LOAD B, A" << std::endl;
+					DEBUG_LOG("LOAD B, A");
 					
 					break;
 				}
 			case 0x48:
 				{
 					C = B;
-					std::cout << "LOAD C, B" << std::endl;
+					DEBUG_LOG("LOAD C, B");
 					
 					break;
 				}
 			case 0x49:
 				{
 					C = C;
-					std::cout << "LOAD C, C" << std::endl;
+					DEBUG_LOG("LOAD C, C");
 					
 					break;
 				}
 			case 0x4A:
 				{
 					C = D;
-					std::cout << "LOAD C, D" << std::endl;
+					DEBUG_LOG("LOAD C, D");
 					
 					break;
 				}
 			case 0x4B:
 				{
 					C = E;
-					std::cout << "LOAD C, E" << std::endl;
+					DEBUG_LOG("LOAD C, E");
 					
 					break;
 				}
 			case 0x4C:
 				{
 					C = H;
-					std::cout << "LOAD C, H" << std::endl;
+					DEBUG_LOG("LOAD C, H");
 					
 					break;
 				}
 			case 0x4D:
 				{
 					C = L;
-					std::cout << "LOAD C, L" << std::endl;
+					DEBUG_LOG("LOAD C, L");
 					
 					break;
 				}
@@ -933,56 +979,56 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned int address = H << 8 | L;
 					C = memory[address];
-					std::cout << "LOAD C, (HL)" << std::endl;
+					DEBUG_LOG("LOAD C, (HL)");
 					
 					break;
 				}
 			case 0x4F:
 				{
 					C = A;
-					std::cout << "LOAD C, A" << std::endl;
+					DEBUG_LOG("LOAD C, A");
 					
 					break;
 				}
 			case 0x50:
 			{
 				D = B;
-				std::cout << "LOAD D, B" << std::endl;
+				DEBUG_LOG("LOAD D, B");
 				
 				break;
 			}
 			case 0x51:
 			{
 				D = C;
-				std::cout << "LOAD D, C" << std::endl;
+				DEBUG_LOG("LOAD D, C");
 				
 				break;
 			}
 			case 0x52:
 			{
 				D = D;
-				std::cout << "LOAD D, D" << std::endl;
+				DEBUG_LOG("LOAD D, D");
 				
 				break;
 			}
 			case 0x53:
 			{
 				D = E;
-				std::cout << "LOAD D, E" << std::endl;
+				DEBUG_LOG("LOAD D, E");
 				
 				break;
 			}
 			case 0x54:
 			{
 				D = H;
-				std::cout << "LOAD D, H" << std::endl;
+				DEBUG_LOG("LOAD D, H");
 				
 				break;
 			}
 			case 0x55:
 			{
 				D = L;
-				std::cout << "LOAD D, L" << std::endl;
+				DEBUG_LOG("LOAD D, L");
 				
 				break;
 			}
@@ -990,56 +1036,56 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				D = memory[address];
-				std::cout << "LOAD D, (HL)" << std::endl;
+				DEBUG_LOG("LOAD D, (HL)");
 				
 				break;
 			}
 			case 0x57:
 			{
 				D = A;
-				std::cout << "LOAD D, A" << std::endl;
+				DEBUG_LOG("LOAD D, A");
 				
 				break;
 			}
 			case 0x58:
 			{
 				E = B;
-				std::cout << "LOAD E, B" << std::endl;
+				DEBUG_LOG("LOAD E, B");
 				
 				break;
 			}
 			case 0x59:
 			{
 				E = C;
-				std::cout << "LOAD E, C" << std::endl;
+				DEBUG_LOG("LOAD E, C");
 				
 				break;
 			}
 			case 0x5A:
 			{
 				E = D;
-				std::cout << "LOAD E, D" << std::endl;
+				DEBUG_LOG("LOAD E, D");
 				
 				break;
 			}
 			case 0x5B:
 			{
 				E = E;
-				std::cout << "LOAD E, E" << std::endl;
+				DEBUG_LOG("LOAD E, E");
 				
 				break;
 			}
 			case 0x5C:
 			{
 				E = H;
-				std::cout << "LOAD E, H" << std::endl;
+				DEBUG_LOG("LOAD E, H");
 				
 				break;
 			}
 			case 0x5D:
 			{
 				E = L;
-				std::cout << "LOAD E, L" << std::endl;
+				DEBUG_LOG("LOAD E, L");
 				
 				break;
 			}
@@ -1047,56 +1093,56 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				E = memory[address];
-				std::cout << "LOAD E, (HL)" << std::endl;
+				DEBUG_LOG("LOAD E, (HL)");
 				
 				break;
 			}
 			case 0x5F:
 			{
 				E = A;
-				std::cout << "LOAD E, A" << std::endl;
+				DEBUG_LOG("LOAD E, A");
 				
 				break;
 			}
 			case 0x60:
 			{
 				H = B;
-				std::cout << "LOAD H, B" << std::endl;
+				DEBUG_LOG("LOAD H, B");
 				
 				break;
 			}
 			case 0x61:
 			{
 				H = C;
-				std::cout << "LOAD H, C" << std::endl;
+				DEBUG_LOG("LOAD H, C");
 				
 				break;
 			}
 			case 0x62:
 			{
 				H = D;
-				std::cout << "LOAD H, D" << std::endl;
+				DEBUG_LOG("LOAD H, D");
 				
 				break;
 			}
 			case 0x63:
 			{
 				H = E;
-				std::cout << "LOAD H, E" << std::endl;
+				DEBUG_LOG("LOAD H, E");
 				
 				break;
 			}
 			case 0x64:
 			{
 				H = H;
-				std::cout << "LOAD H, H" << std::endl;
+				DEBUG_LOG("LOAD H, H");
 				
 				break;
 			}
 			case 0x65:
 			{
 				H = L;
-				std::cout << "LOAD H, L" << std::endl;
+				DEBUG_LOG("LOAD H, L");
 				
 				break;
 			}
@@ -1104,56 +1150,56 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				H = memory[address];
-				std::cout << "LOAD H, (HL)" << std::endl;
+				DEBUG_LOG("LOAD H, (HL)");
 				
 				break;
 			}
 			case 0x67:
 			{
 				H = A;
-				std::cout << "LOAD H, A" << std::endl;
+				DEBUG_LOG("LOAD H, A");
 				
 				break;
 			}
 			case 0x68:
 			{
 				L = B;
-				std::cout << "LOAD L, B" << std::endl;
+				DEBUG_LOG("LOAD L, B");
 				
 				break;
 			}
 			case 0x69:
 			{
 				L = C;
-				std::cout << "LOAD L, C" << std::endl;
+				DEBUG_LOG("LOAD L, C");
 				
 				break;
 			}
 			case 0x6A:
 			{
 				L = D;
-				std::cout << "LOAD L, D" << std::endl;
+				DEBUG_LOG("LOAD L, D");
 				
 				break;
 			}
 			case 0x6B:
 			{
 				L = E;
-				std::cout << "LOAD L, E" << std::endl;
+				DEBUG_LOG("LOAD L, E");
 				
 				break;
 			}
 			case 0x6C:
 			{
 				L = H;
-				std::cout << "LOAD L, H" << std::endl;
+				DEBUG_LOG("LOAD L, H");
 				
 				break;
 			}
 			case 0x6D:
 			{
 				L = L;
-				std::cout << "LOAD L, L" << std::endl;
+				DEBUG_LOG("LOAD L, L");
 				
 				break;
 			}
@@ -1161,14 +1207,14 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				L = memory[address];
-				std::cout << "LOAD L, (HL)" << std::endl;
+				DEBUG_LOG("LOAD L, (HL)");
 				
 				break;
 			}
 			case 0x6F:
 			{
 				L = A;
-				std::cout << "LOAD L, A" << std::endl;
+				DEBUG_LOG("LOAD L, A");
 				
 				break;
 			}
@@ -1176,7 +1222,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = B;
-				std::cout << "LOAD (HL), B" << std::endl;
+				DEBUG_LOG("LOAD (HL), B");
 				
 				break;
 			}
@@ -1184,7 +1230,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = C;
-				std::cout << "LOAD (HL), C" << std::endl;
+				DEBUG_LOG("LOAD (HL), C");
 				
 				break;
 			}
@@ -1192,7 +1238,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = D;
-				std::cout << "LOAD (HL), D" << std::endl;
+				DEBUG_LOG("LOAD (HL), D");
 				
 				break;
 			}
@@ -1200,7 +1246,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = E;
-				std::cout << "LOAD (HL), E" << std::endl;
+				DEBUG_LOG("LOAD (HL), E");
 				
 				break;
 			}
@@ -1208,7 +1254,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = H;
-				std::cout << "LOAD (HL), H" << std::endl;
+				DEBUG_LOG("LOAD (HL), H");
 				
 				break;
 			}
@@ -1216,7 +1262,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = L;
-				std::cout << "LOAD (HL), L" << std::endl;
+				DEBUG_LOG("LOAD (HL), L");
 				
 				break;
 			}
@@ -1224,49 +1270,49 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				memory[address] = A;
-				std::cout << "LOAD (HL), A" << std::endl;
+				DEBUG_LOG("LOAD (HL), A");
 				
 				break;
 			}
 			case 0x78:
 			{
 				A = B;
-				std::cout << "LOAD A, B" << std::endl;
+				DEBUG_LOG("LOAD A, B");
 				
 				break;
 			}
 			case 0x79:
 			{
 				A = C;
-				std::cout << "LOAD A, C" << std::endl;
+				DEBUG_LOG("LOAD A, C");
 				
 				break;
 			}
 			case 0x7A:
 			{
 				A = D;
-				std::cout << "LOAD A, D" << std::endl;
+				DEBUG_LOG("LOAD A, D");
 				
 				break;
 			}
 			case 0x7B:
 			{
 				A = E;
-				std::cout << "LOAD A, E" << std::endl;
+				DEBUG_LOG("LOAD A, E");
 				
 				break;
 			}
 			case 0x7C:
 			{
 				A = H;
-				std::cout << "LOAD A, H" << std::endl;
+				DEBUG_LOG("LOAD A, H");
 				
 				break;
 			}
 			case 0x7D:
 			{
 				A = L;
-				std::cout << "LOAD A, L" << std::endl;
+				DEBUG_LOG("LOAD A, L");
 				
 				break;
 			}
@@ -1274,62 +1320,62 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int address = H << 8 | L;
 				A = memory[address];
-				std::cout << "LOAD A, (HL)" << std::endl;
+				DEBUG_LOG("LOAD A, (HL)");
 				
 				break;
 			}
 			case 0x7F:
 			{
 				A = A;
-				std::cout << "LOAD A, A" << std::endl;
+				DEBUG_LOG("LOAD A, A");
 				
 				break;
 			}
 			case 0xA8:
 			{
-				std::cout << "XOR B" << std::endl;
+				DEBUG_LOG("XOR B");
 				xorA(B);
 				
 				break;
 			}
 			case 0xA9:
 			{
-				std::cout << "XOR C" << std::endl;
+				DEBUG_LOG("XOR C");
 				xorA(C);
 				
 				break;
 			}
 			case 0xAA:
 			{
-				std::cout << "XOR D" << std::endl;
+				DEBUG_LOG("XOR D");
 				xorA(D);
 				
 				break;
 			}
 			case 0xAB:
 			{
-				std::cout << "XOR E" << std::endl;
+				DEBUG_LOG("XOR E");
 				xorA(E);
 				
 				break;
 			}
 			case 0xAC:
 			{
-				std::cout << "XOR H" << std::endl;
+				DEBUG_LOG("XOR H");
 				xorA(H);
 				
 				break;
 			}
 			case 0xAD:
 			{
-				std::cout << "XOR L" << std::endl;
+				DEBUG_LOG("XOR L");
 				xorA(L);
 				
 				break;
 			}
 			case 0xAE:
 			{
-				std::cout << "XOR (HL)" << std::endl;
+				DEBUG_LOG("XOR (HL)");
 				unsigned int address = H << 8 | L;
 				xorA(memory[address]);
 				
@@ -1337,14 +1383,14 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xAF:
 			{
-				std::cout << "XOR A" << std::endl;
+				DEBUG_LOG("XOR A");
 				xorA(A);
 				
 				break;
 			}
 			case 0xB0:
 			{
-				std::cout << "OR A, B" << std::endl;
+				DEBUG_LOG("OR A, B");
 				A = A | B;
 				
 				setZ(A == 0);
@@ -1352,7 +1398,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB1:
 			{
-				std::cout << "OR A, C" << std::endl;
+				DEBUG_LOG("OR A, C");
 				A = A | C;
 				
 				setZ(A == 0);
@@ -1360,7 +1406,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB2:
 			{
-				std::cout << "OR A, D" << std::endl;
+				DEBUG_LOG("OR A, D");
 				A = A | D;
 				
 				setZ(A == 0);
@@ -1368,7 +1414,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB3:
 			{
-				std::cout << "OR A, E" << std::endl;
+				DEBUG_LOG("OR A, E");
 				A = A | E;
 				
 				setZ(A == 0);
@@ -1376,7 +1422,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB4:
 			{
-				std::cout << "OR A, H" << std::endl;
+				DEBUG_LOG("OR A, H");
 				A = A | H;
 				
 				setZ(A == 0);
@@ -1384,7 +1430,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB5:
 			{
-				std::cout << "OR A, L" << std::endl;
+				DEBUG_LOG("OR A, L");
 				A = A | L;
 				
 				setZ(A == 0);
@@ -1392,7 +1438,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB6:
 			{
-				std::cout << "OR A, (HL)" << std::endl;
+				DEBUG_LOG("OR A, (HL)");
 				unsigned int address = H << 8 | L;
 				A = A | memory[address];
 				
@@ -1401,30 +1447,87 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xB7:
 			{
-				std::cout << "OR A, A" << std::endl;
+				DEBUG_LOG("OR A, A");
 				A = A | A;
 				
 				setZ(A == 0);
+				break;
+			}
+			case 0xB8:
+			{
+				DEBUG_LOG("CP B");
+				compareWithA(B);
+				
+				break;
+			}
+			case 0xB9:
+			{
+				DEBUG_LOG("CP C");
+				compareWithA(C);
+				
+				break;
+			}
+			case 0xBA:
+			{
+				DEBUG_LOG("CP D");
+				compareWithA(D);
+				
+				break;
+			}
+			case 0xBB:
+			{
+				DEBUG_LOG("CP E");
+				compareWithA(E);
+				
+				break;
+			}
+			case 0xBC:
+			{
+				DEBUG_LOG("CP H");
+				compareWithA(H);
+				
+				break;
+			}
+			case 0xBD:
+			{
+				DEBUG_LOG("CP L");
+				compareWithA(L);
+				
+				break;
+			}
+			case 0xBE:
+			{
+				DEBUG_LOG("CP (HL)");
+				unsigned int address = H << 8 | L;
+				unsigned char value = memory[address];
+				compareWithA(value);
+				
+				break;
+			}
+			case 0xBF:
+			{
+				DEBUG_LOG("CP A");
+				compareWithA(A);
+				
 				break;
 			}
 			case 0xC0:
 			{
 				if (ZFlag())
 				{
-					//PC++;
-					std::cout << "RET NZ - No jump" << std::endl;
+					DEBUG_LOG("RET NZ - No jump");
 				}
 				else
 				{
 					PC = pop16();
-					std::cout << "RET NZ - " << "0x" << intToHex(PC) << std::endl;
+					DEBUG_LOG("RET NZ - " << "0x" << intToHex(PC));
 				}
 				break;
 			}
 			case 0xC1:
 				{
 					unsigned int value = pop16();
-					std::cout << "POP BC - " << "0x" << intToHex(value) << std::endl;
+					DEBUG_LOG("POP BC - " << "0x" << intToHex(value));
 					B = value >> 8;
 					C = value & 0xFF;
 
@@ -1434,7 +1537,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "JP NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("JP NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					if (!ZFlag())
 						PC = b3 << 8 | b2;
 
@@ -1444,7 +1547,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					PC = b3 << 8 | b2;
 
 					break;
@@ -1453,7 +1556,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "CALL NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("CALL NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					if (!ZFlag())
 					{
@@ -1467,14 +1570,14 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int value = B << 8 | C;
 				push16(value);
-				std::cout << "PUSH BC" << std::endl;
+				DEBUG_LOG("PUSH BC");
 				
 				break;
 			}
 			case 0xC6:
 			{
 				unsigned char b2 = memory[PC++];
-				std::cout << "ADD d8 - " << "0x" << charToHex(b2) << std::endl;
+				DEBUG_LOG("ADD d8 - " << "0x" << charToHex(b2));
 				
 				bool carry = ((signed int)A + (signed int)b2) > 0xFF;
 				signed char half = (0xF & (signed char)A) + (0xF & b2);
@@ -1489,6 +1592,19 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xC8:
+			{
+				if (!ZFlag())
+				{
+					DEBUG_LOG("RET Z - No jump");
+				}
+				else
+				{
+					PC = pop16();
+					DEBUG_LOG("RET Z - " << "0x" << intToHex(PC));
+				}
+				break;
+			}
 			case 0xCB:
 			{
 					unsigned char b2 = memory[PC++];
@@ -1496,49 +1612,49 @@ void TemplateScreen::Update(const double dt)
 					{
 						case 0x00:
 						{
-							std::cout << "RLC B" << std::endl;
+							DEBUG_LOG("RLC B");
 							RLC(B);
 
 							break;
 						}
 						case 0x01:
 							{
-								std::cout << "RLC C" << std::endl;
+								DEBUG_LOG("RLC C");
 								RLC(C);
 
 								break;
 							}
 						case 0x02:
 							{
-								std::cout << "RLC D" << std::endl;
+								DEBUG_LOG("RLC D");
 								RLC(D);
 
 								break;
 							}
 						case 0x03:
 							{
-								std::cout << "RLC E" << std::endl;
+								DEBUG_LOG("RLC E");
 								RLC(E);
 
 								break;
 							}
 						case 0x04:
 							{
-								std::cout << "RLC H" << std::endl;
+								DEBUG_LOG("RLC H");
 								RLC(H);
 
 								break;
 							}
 						case 0x05:
 							{
-								std::cout << "RLC L" << std::endl;
+								DEBUG_LOG("RLC L");
 								RLC(L);
 
 								break;
 							}
 						case 0x06:
 							{
-								std::cout << "RLC (HL)" << std::endl;
+								DEBUG_LOG("RLC (HL)");
 								
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
@@ -1549,7 +1665,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0x07:
 							{
-								std::cout << "RLC A" << std::endl;
+								DEBUG_LOG("RLC A");
 								RLC(A);
 
 								break;
@@ -1557,49 +1673,49 @@ void TemplateScreen::Update(const double dt)
 
 						case 0x08:
 							{
-								std::cout << "RRC B" << std::endl;
+								DEBUG_LOG("RRC B");
 								RRC(B);
 
 								break;
 							}
 						case 0x09:
 							{
-								std::cout << "RRC C" << std::endl;
+								DEBUG_LOG("RRC C");
 								RRC(C);
 
 								break;
 							}
 						case 0x0A:
 							{
-								std::cout << "RRC D" << std::endl;
+								DEBUG_LOG("RRC D");
 								RRC(D);
 
 								break;
 							}
 						case 0x0B:
 							{
-								std::cout << "RRC E" << std::endl;
+								DEBUG_LOG("RRC E");
 								RRC(E);
 
 								break;
 							}
 						case 0x0C:
 							{
-								std::cout << "RRC H" << std::endl;
+								DEBUG_LOG("RRC H");
 								RRC(H);
 
 								break;
 							}
 						case 0x0D:
 							{
-								std::cout << "RRC L" << std::endl;
+								DEBUG_LOG("RRC L");
 								RRC(L);
 
 								break;
 							}
 						case 0x0E:
 							{
-								std::cout << "RRC (HL)" << std::endl;
+								DEBUG_LOG("RRC (HL)");
 
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
@@ -1610,7 +1726,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0x0F:
 							{
-								std::cout << "RRC A" << std::endl;
+								DEBUG_LOG("RRC A");
 								RRC(A);
 
 								break;
@@ -1620,49 +1736,49 @@ void TemplateScreen::Update(const double dt)
 
 						case 0x10:
 						{
-							std::cout << "RL B" << std::endl;
+							DEBUG_LOG("RL B");
 							RL(B);
 							
 							break;
 						}
 						case 0x11:
 						{
-							std::cout << "RL C" << std::endl;
+							DEBUG_LOG("RL C");
 							RL(C);
 							
 							break;
 						}
 						case 0x12:
 						{
-							std::cout << "RL D" << std::endl;
+							DEBUG_LOG("RL D");
 							RL(D);
 							
 							break;
 						}
 						case 0x13:
 						{
-							std::cout << "RL E" << std::endl;
+							DEBUG_LOG("RL E");
 							RL(E);
 							
 							break;
 						}
 						case 0x14:
 						{
-							std::cout << "RL H" << std::endl;
+							DEBUG_LOG("RL H");
 							RL(H);
 							
 							break;
 						}
 						case 0x15:
 						{
-							std::cout << "RL L" << std::endl;
+							DEBUG_LOG("RL L");
 							RL(L);
 							
 							break;
 						}
 						case 0x16:
 						{
-							std::cout << "RL (HL)" << std::endl;
+							DEBUG_LOG("RL (HL)");
 							
 							unsigned int address = H << 8 | L;
 							unsigned char value = memory[address];
@@ -1673,7 +1789,7 @@ void TemplateScreen::Update(const double dt)
 						}
 						case 0x17:
 						{
-							std::cout << "RL A" << std::endl;
+							DEBUG_LOG("RL A");
 							RL(A);
 							
 							break;
@@ -1681,49 +1797,49 @@ void TemplateScreen::Update(const double dt)
 							
 						case 0x18:
 						{
-							std::cout << "RR B" << std::endl;
+							DEBUG_LOG("RR B");
 							RR(B);
 							
 							break;
 						}
 						case 0x19:
 						{
-							std::cout << "RR C" << std::endl;
+							DEBUG_LOG("RR C");
 							RR(C);
 							
 							break;
 						}
 						case 0x1A:
 						{
-							std::cout << "RR D" << std::endl;
+							DEBUG_LOG("RR D");
 							RR(D);
 							
 							break;
 						}
 						case 0x1B:
 						{
-							std::cout << "RR E" << std::endl;
+							DEBUG_LOG("RR E");
 							RR(E);
 							
 							break;
 						}
 						case 0x1C:
 						{
-							std::cout << "RR H" << std::endl;
+							DEBUG_LOG("RR H");
 							RR(H);
 							
 							break;
 						}
 						case 0x1D:
 						{
-							std::cout << "RR L" << std::endl;
+							DEBUG_LOG("RR L");
 							RR(L);
 							
 							break;
 						}
 						case 0x1E:
 						{
-							std::cout << "RR (HL)" << std::endl;
+							DEBUG_LOG("RR (HL)");
 							
 							unsigned int address = H << 8 | L;
 							unsigned char value = memory[address];
@@ -1734,7 +1850,7 @@ void TemplateScreen::Update(const double dt)
 						}
 						case 0x1F:
 						{
-							std::cout << "RR A" << std::endl;
+							DEBUG_LOG("RR A");
 							RR(A);
 							
 							break;
@@ -1744,49 +1860,49 @@ void TemplateScreen::Update(const double dt)
 							
 						case 0x20:
 						{
-							std::cout << "SLA B" << std::endl;
+							DEBUG_LOG("SLA B");
 							SLA(B);
 							
 							break;
 						}
 						case 0x21:
 						{
-							std::cout << "SLA C" << std::endl;
+							DEBUG_LOG("SLA C");
 							SLA(C);
 							
 							break;
 						}
 						case 0x22:
 						{
-							std::cout << "SLA D" << std::endl;
+							DEBUG_LOG("SLA D");
 							SLA(D);
 							
 							break;
 						}
 						case 0x23:
 						{
-							std::cout << "SLA E" << std::endl;
+							DEBUG_LOG("SLA E");
 							SLA(E);
 							
 							break;
 						}
 						case 0x24:
 						{
-							std::cout << "SLA H" << std::endl;
+							DEBUG_LOG("SLA H");
 							SLA(H);
 							
 							break;
 						}
 						case 0x25:
 						{
-							std::cout << "SLA L" << std::endl;
+							DEBUG_LOG("SLA L");
 							SLA(L);
 							
 							break;
 						}
 						case 0x26:
 						{
-							std::cout << "SLA (HL)" << std::endl;
+							DEBUG_LOG("SLA (HL)");
 							
 							unsigned int address = H << 8 | L;
 							unsigned char value = memory[address];
@@ -1797,7 +1913,7 @@ void TemplateScreen::Update(const double dt)
 						}
 						case 0x27:
 						{
-							std::cout << "SLA A" << std::endl;
+							DEBUG_LOG("SLA A");
 							SLA(A);
 							
 							break;
@@ -1805,49 +1921,49 @@ void TemplateScreen::Update(const double dt)
 							
 						case 0x28:
 						{
-							std::cout << "SRA B" << std::endl;
+							DEBUG_LOG("SRA B");
 							SRA(B);
 							
 							break;
 						}
 						case 0x29:
 						{
-							std::cout << "SRA C" << std::endl;
+							DEBUG_LOG("SRA C");
 							SRA(C);
 							
 							break;
 						}
 						case 0x2A:
 						{
-							std::cout << "SRA D" << std::endl;
+							DEBUG_LOG("SRA D");
 							SRA(D);
 							
 							break;
 						}
 						case 0x2B:
 						{
-							std::cout << "SRA E" << std::endl;
+							DEBUG_LOG("SRA E");
 							SRA(E);
 							
 							break;
 						}
 						case 0x2C:
 						{
-							std::cout << "SRA H" << std::endl;
+							DEBUG_LOG("SRA H");
 							SRA(H);
 							
 							break;
 						}
 						case 0x2D:
 						{
-							std::cout << "SRA L" << std::endl;
+							DEBUG_LOG("SRA L");
 							SRA(L);
 							
 							break;
 						}
 						case 0x2E:
 						{
-							std::cout << "SRA (HL)" << std::endl;
+							DEBUG_LOG("SRA (HL)");
 							
 							unsigned int address = H << 8 | L;
 							unsigned char value = memory[address];
@@ -1858,7 +1974,7 @@ void TemplateScreen::Update(const double dt)
 						}
 						case 0x2F:
 						{
-							std::cout << "SRA A" << std::endl;
+							DEBUG_LOG("SRA A");
 							SRA(A);
 							
 							break;
@@ -1870,43 +1986,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0x80:
 						{
-							std::cout << "RES 0, B" << std::endl;
+							DEBUG_LOG("RES 0, B");
 							bitmanip(B, 0, 0);
 							break;
 						}
 						case 0x81:
 							{
-								std::cout << "RES 0, C" << std::endl;
+								DEBUG_LOG("RES 0, C");
 								bitmanip(C, 0, 0);
 								break;
 							}
 						case 0x82:
 							{
-								std::cout << "RES 0, D" << std::endl;
+								DEBUG_LOG("RES 0, D");
 								bitmanip(D, 0, 0);
 								break;
 							}
 						case 0x83:
 							{
-								std::cout << "RES 0, E" << std::endl;
+								DEBUG_LOG("RES 0, E");
 								bitmanip(E, 0, 0);
 								break;
 							}
 						case 0x84:
 							{
-								std::cout << "RES 0, H" << std::endl;
+								DEBUG_LOG("RES 0, H");
 								bitmanip(H, 0, 0);
 								break;
 							}
 						case 0x85:
 							{
-								std::cout << "RES 0, L" << std::endl;
+								DEBUG_LOG("RES 0, L");
 								bitmanip(L, 0, 0);
 								break;
 							}
 						case 0x86:
 							{
-								std::cout << "RES 0, (HL)" << std::endl;
+								DEBUG_LOG("RES 0, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 0, 0);
@@ -1915,49 +2031,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0x87:
 							{
-								std::cout << "RES 0, A" << std::endl;
+								DEBUG_LOG("RES 0, A");
 								bitmanip(A, 0, 0);
 								break;
 							}
 						case 0x88:
 							{
-								std::cout << "RES 1, B" << std::endl;
+								DEBUG_LOG("RES 1, B");
 								bitmanip(B, 1, 0);
 								break;
 							}
 						case 0x89:
 							{
-								std::cout << "RES 1, C" << std::endl;
+								DEBUG_LOG("RES 1, C");
 								bitmanip(C, 1, 0);
 								break;
 							}
 						case 0x8A:
 							{
-								std::cout << "RES 1, D" << std::endl;
+								DEBUG_LOG("RES 1, D");
 								bitmanip(D, 1, 0);
 								break;
 							}
 						case 0x8B:
 							{
-								std::cout << "RES 1, E" << std::endl;
+								DEBUG_LOG("RES 1, E");
 								bitmanip(E, 1, 0);
 								break;
 							}
 						case 0x8C:
 							{
-								std::cout << "RES 1, H" << std::endl;
+								DEBUG_LOG("RES 1, H");
 								bitmanip(H, 1, 0);
 								break;
 							}
 						case 0x8D:
 							{
-								std::cout << "RES 1, L" << std::endl;
+								DEBUG_LOG("RES 1, L");
 								bitmanip(L, 1, 0);
 								break;
 							}
 						case 0x8E:
 							{
-								std::cout << "RES 1, (HL)" << std::endl;
+								DEBUG_LOG("RES 1, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 1, 0);
@@ -1966,7 +2082,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0x8F:
 							{
-								std::cout << "RES 1, A" << std::endl;
+								DEBUG_LOG("RES 1, A");
 								bitmanip(A, 1, 0);
 								break;
 							}
@@ -1975,43 +2091,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0x90:
 							{
-								std::cout << "RES 2, B" << std::endl;
+								DEBUG_LOG("RES 2, B");
 								bitmanip(B, 2, 0);
 								break;
 							}
 						case 0x91:
 							{
-								std::cout << "RES 2, C" << std::endl;
+								DEBUG_LOG("RES 2, C");
 								bitmanip(C, 2, 0);
 								break;
 							}
 						case 0x92:
 							{
-								std::cout << "RES 2, D" << std::endl;
+								DEBUG_LOG("RES 2, D");
 								bitmanip(D, 2, 0);
 								break;
 							}
 						case 0x93:
 							{
-								std::cout << "RES 2, E" << std::endl;
+								DEBUG_LOG("RES 2, E");
 								bitmanip(E, 2, 0);
 								break;
 							}
 						case 0x94:
 							{
-								std::cout << "RES 2, H" << std::endl;
+								DEBUG_LOG("RES 2, H");
 								bitmanip(H, 2, 0);
 								break;
 							}
 						case 0x95:
 							{
-								std::cout << "RES 2, L" << std::endl;
+								DEBUG_LOG("RES 2, L");
 								bitmanip(L, 2, 0);
 								break;
 							}
 						case 0x96:
 							{
-								std::cout << "RES 2, (HL)" << std::endl;
+								DEBUG_LOG("RES 2, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 2, 0);
@@ -2020,49 +2136,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0x97:
 							{
-								std::cout << "RES 2, A" << std::endl;
+								DEBUG_LOG("RES 2, A");
 								bitmanip(A, 2, 0);
 								break;
 							}
 						case 0x98:
 							{
-								std::cout << "RES 3, B" << std::endl;
+								DEBUG_LOG("RES 3, B");
 								bitmanip(B, 3, 0);
 								break;
 							}
 						case 0x99:
 							{
-								std::cout << "RES 3, C" << std::endl;
+								DEBUG_LOG("RES 3, C");
 								bitmanip(C, 3, 0);
 								break;
 							}
 						case 0x9A:
 							{
-								std::cout << "RES 3, D" << std::endl;
+								DEBUG_LOG("RES 3, D");
 								bitmanip(D, 3, 0);
 								break;
 							}
 						case 0x9B:
 							{
-								std::cout << "RES 3, E" << std::endl;
+								DEBUG_LOG("RES 3, E");
 								bitmanip(E, 3, 0);
 								break;
 							}
 						case 0x9C:
 							{
-								std::cout << "RES 3, H" << std::endl;
+								DEBUG_LOG("RES 3, H");
 								bitmanip(H, 3, 0);
 								break;
 							}
 						case 0x9D:
 							{
-								std::cout << "RES 3, L" << std::endl;
+								DEBUG_LOG("RES 3, L");
 								bitmanip(L, 3, 0);
 								break;
 							}
 						case 0x9E:
 							{
-								std::cout << "RES 3, (HL)" << std::endl;
+								DEBUG_LOG("RES 3, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 3, 0);
@@ -2071,7 +2187,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0x9F:
 							{
-								std::cout << "RES 3, A" << std::endl;
+								DEBUG_LOG("RES 3, A");
 								bitmanip(A, 3, 0);
 								break;
 							}
@@ -2080,43 +2196,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0xA0:
 							{
-								std::cout << "RES 4, B" << std::endl;
+								DEBUG_LOG("RES 4, B");
 								bitmanip(B, 4, 0);
 								break;
 							}
 						case 0xA1:
 							{
-								std::cout << "RES 4, C" << std::endl;
+								DEBUG_LOG("RES 4, C");
 								bitmanip(C, 4, 0);
 								break;
 							}
 						case 0xA2:
 							{
-								std::cout << "RES 4, D" << std::endl;
+								DEBUG_LOG("RES 4, D");
 								bitmanip(D, 4, 0);
 								break;
 							}
 						case 0xA3:
 							{
-								std::cout << "RES 4, E" << std::endl;
+								DEBUG_LOG("RES 4, E");
 								bitmanip(E, 4, 0);
 								break;
 							}
 						case 0xA4:
 							{
-								std::cout << "RES 4, H" << std::endl;
+								DEBUG_LOG("RES 4, H");
 								bitmanip(H, 4, 0);
 								break;
 							}
 						case 0xA5:
 							{
-								std::cout << "RES 4, L" << std::endl;
+								DEBUG_LOG("RES 4, L");
 								bitmanip(L, 4, 0);
 								break;
 							}
 						case 0xA6:
 							{
-								std::cout << "RES 4, (HL)" << std::endl;
+								DEBUG_LOG("RES 4, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 4, 0);
@@ -2125,49 +2241,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xA7:
 							{
-								std::cout << "RES 4, A" << std::endl;
+								DEBUG_LOG("RES 4, A");
 								bitmanip(A, 4, 0);
 								break;
 							}
 						case 0xA8:
 							{
-								std::cout << "RES 5, B" << std::endl;
+								DEBUG_LOG("RES 5, B");
 								bitmanip(B, 5, 0);
 								break;
 							}
 						case 0xA9:
 							{
-								std::cout << "RES 5, C" << std::endl;
+								DEBUG_LOG("RES 5, C");
 								bitmanip(C, 5, 0);
 								break;
 							}
 						case 0xAA:
 							{
-								std::cout << "RES 5, D" << std::endl;
+								DEBUG_LOG("RES 5, D");
 								bitmanip(D, 5, 0);
 								break;
 							}
 						case 0xAB:
 							{
-								std::cout << "RES 5, E" << std::endl;
+								DEBUG_LOG("RES 5, E");
 								bitmanip(E, 5, 0);
 								break;
 							}
 						case 0xAC:
 							{
-								std::cout << "RES 5, H" << std::endl;
+								DEBUG_LOG("RES 5, H");
 								bitmanip(H, 5, 0);
 								break;
 							}
 						case 0xAD:
 							{
-								std::cout << "RES 5, L" << std::endl;
+								DEBUG_LOG("RES 5, L");
 								bitmanip(L, 5, 0);
 								break;
 							}
 						case 0xAE:
 							{
-								std::cout << "RES 5, (HL)" << std::endl;
+								DEBUG_LOG("RES 5, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 5, 0);
@@ -2176,7 +2292,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xAF:
 							{
-								std::cout << "RES 5, A" << std::endl;
+								DEBUG_LOG("RES 5, A");
 								bitmanip(A, 5, 0);
 								break;
 							}
@@ -2185,43 +2301,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0xB0:
 							{
-								std::cout << "RES 6, B" << std::endl;
+								DEBUG_LOG("RES 6, B");
 								bitmanip(B, 6, 0);
 								break;
 							}
 						case 0xB1:
 							{
-								std::cout << "RES 6, C" << std::endl;
+								DEBUG_LOG("RES 6, C");
 								bitmanip(C, 6, 0);
 								break;
 							}
 						case 0xB2:
 							{
-								std::cout << "RES 6, D" << std::endl;
+								DEBUG_LOG("RES 6, D");
 								bitmanip(D, 6, 0);
 								break;
 							}
 						case 0xB3:
 							{
-								std::cout << "RES 6, E" << std::endl;
+								DEBUG_LOG("RES 6, E");
 								bitmanip(E, 6, 0);
 								break;
 							}
 						case 0xB4:
 							{
-								std::cout << "RES 6, H" << std::endl;
+								DEBUG_LOG("RES 6, H");
 								bitmanip(H, 6, 0);
 								break;
 							}
 						case 0xB5:
 							{
-								std::cout << "RES 6, L" << std::endl;
+								DEBUG_LOG("RES 6, L");
 								bitmanip(L, 6, 0);
 								break;
 							}
 						case 0xB6:
 							{
-								std::cout << "RES 6, (HL)" << std::endl;
+								DEBUG_LOG("RES 6, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 6, 0);
@@ -2230,49 +2346,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xB7:
 							{
-								std::cout << "RES 6, A" << std::endl;
+								DEBUG_LOG("RES 6, A");
 								bitmanip(A, 6, 0);
 								break;
 							}
 						case 0xB8:
 							{
-								std::cout << "RES 7, B" << std::endl;
+								DEBUG_LOG("RES 7, B");
 								bitmanip(B, 7, 0);
 								break;
 							}
 						case 0xB9:
 							{
-								std::cout << "RES 7, C" << std::endl;
+								DEBUG_LOG("RES 7, C");
 								bitmanip(C, 7, 0);
 								break;
 							}
 						case 0xBA:
 							{
-								std::cout << "RES 7, D" << std::endl;
+								DEBUG_LOG("RES 7, D");
 								bitmanip(D, 7, 0);
 								break;
 							}
 						case 0xBB:
 							{
-								std::cout << "RES 7, E" << std::endl;
+								DEBUG_LOG("RES 7, E");
 								bitmanip(E, 7, 0);
 								break;
 							}
 						case 0xBC:
 							{
-								std::cout << "RES 7, H" << std::endl;
+								DEBUG_LOG("RES 7, H");
 								bitmanip(H, 7, 0);
 								break;
 							}
 						case 0xBD:
 							{
-								std::cout << "RES 7, L" << std::endl;
+								DEBUG_LOG("RES 7, L");
 								bitmanip(L, 7, 0);
 								break;
 							}
 						case 0xBE:
 							{
-								std::cout << "RES 7, (HL)" << std::endl;
+								DEBUG_LOG("RES 7, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 7, 0);
@@ -2281,7 +2397,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xBF:
 							{
-								std::cout << "RES 7, A" << std::endl;
+								DEBUG_LOG("RES 7, A");
 								bitmanip(A, 7, 0);
 								break;
 							}
@@ -2292,43 +2408,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0xC0:
 							{
-								std::cout << "SET 0, B" << std::endl;
+								DEBUG_LOG("SET 0, B");
 								bitmanip(B, 0, 1);
 								break;
 							}
 						case 0xC1:
 							{
-								std::cout << "SET 0, C" << std::endl;
+								DEBUG_LOG("SET 0, C");
 								bitmanip(C, 0, 1);
 								break;
 							}
 						case 0xC2:
 							{
-								std::cout << "SET 0, D" << std::endl;
+								DEBUG_LOG("SET 0, D");
 								bitmanip(D, 0, 1);
 								break;
 							}
 						case 0xC3:
 							{
-								std::cout << "SET 0, E" << std::endl;
+								DEBUG_LOG("SET 0, E");
 								bitmanip(E, 0, 1);
 								break;
 							}
 						case 0xC4:
 							{
-								std::cout << "SET 0, H" << std::endl;
+								DEBUG_LOG("SET 0, H");
 								bitmanip(H, 0, 1);
 								break;
 							}
 						case 0xC5:
 							{
-								std::cout << "SET 0, L" << std::endl;
+								DEBUG_LOG("SET 0, L");
 								bitmanip(L, 0, 1);
 								break;
 							}
 						case 0xC6:
 							{
-								std::cout << "SET 0, (HL)" << std::endl;
+								DEBUG_LOG("SET 0, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 0, 1);
@@ -2337,49 +2453,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xC7:
 							{
-								std::cout << "SET 0, A" << std::endl;
+								DEBUG_LOG("SET 0, A");
 								bitmanip(A, 0, 1);
 								break;
 							}
 						case 0xC8:
 							{
-								std::cout << "SET 1, B" << std::endl;
+								DEBUG_LOG("SET 1, B");
 								bitmanip(B, 1, 1);
 								break;
 							}
 						case 0xC9:
 							{
-								std::cout << "SET 1, C" << std::endl;
+								DEBUG_LOG("SET 1, C");
 								bitmanip(C, 1, 1);
 								break;
 							}
 						case 0xCA:
 							{
-								std::cout << "SET 1, D" << std::endl;
+								DEBUG_LOG("SET 1, D");
 								bitmanip(D, 1, 1);
 								break;
 							}
 						case 0xCB:
 							{
-								std::cout << "SET 1, E" << std::endl;
+								DEBUG_LOG("SET 1, E");
 								bitmanip(E, 1, 1);
 								break;
 							}
 						case 0xCC:
 							{
-								std::cout << "SET 1, H" << std::endl;
+								DEBUG_LOG("SET 1, H");
 								bitmanip(H, 1, 1);
 								break;
 							}
 						case 0xCD:
 							{
-								std::cout << "SET 1, L" << std::endl;
+								DEBUG_LOG("SET 1, L");
 								bitmanip(L, 1, 1);
 								break;
 							}
 						case 0xCE:
 							{
-								std::cout << "SET 1, (HL)" << std::endl;
+								DEBUG_LOG("SET 1, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 1, 1);
@@ -2388,7 +2504,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xCF:
 							{
-								std::cout << "SET 1, A" << std::endl;
+								DEBUG_LOG("SET 1, A");
 								bitmanip(A, 1, 1);
 								break;
 							}
@@ -2397,43 +2513,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0xD0:
 							{
-								std::cout << "SET 2, B" << std::endl;
+								DEBUG_LOG("SET 2, B");
 								bitmanip(B, 2, 1);
 								break;
 							}
 						case 0xD1:
 							{
-								std::cout << "SET 2, C" << std::endl;
+								DEBUG_LOG("SET 2, C");
 								bitmanip(C, 2, 1);
 								break;
 							}
 						case 0xD2:
 							{
-								std::cout << "SET 2, D" << std::endl;
+								DEBUG_LOG("SET 2, D");
 								bitmanip(D, 2, 1);
 								break;
 							}
 						case 0xD3:
 							{
-								std::cout << "SET 2, E" << std::endl;
+								DEBUG_LOG("SET 2, E");
 								bitmanip(E, 2, 1);
 								break;
 							}
 						case 0xD4:
 							{
-								std::cout << "SET 2, H" << std::endl;
+								DEBUG_LOG("SET 2, H");
 								bitmanip(H, 2, 1);
 								break;
 							}
 						case 0xD5:
 							{
-								std::cout << "SET 2, L" << std::endl;
+								DEBUG_LOG("SET 2, L");
 								bitmanip(L, 2, 1);
 								break;
 							}
 						case 0xD6:
 							{
-								std::cout << "SET 2, (HL)" << std::endl;
+								DEBUG_LOG("SET 2, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 2, 1);
@@ -2442,49 +2558,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xD7:
 							{
-								std::cout << "SET 2, A" << std::endl;
+								DEBUG_LOG("SET 2, A");
 								bitmanip(A, 2, 1);
 								break;
 							}
 						case 0xD8:
 							{
-								std::cout << "SET 3, B" << std::endl;
+								DEBUG_LOG("SET 3, B");
 								bitmanip(B, 3, 1);
 								break;
 							}
 						case 0xD9:
 							{
-								std::cout << "SET 3, C" << std::endl;
+								DEBUG_LOG("SET 3, C");
 								bitmanip(C, 3, 1);
 								break;
 							}
 						case 0xDA:
 							{
-								std::cout << "SET 3, D" << std::endl;
+								DEBUG_LOG("SET 3, D");
 								bitmanip(D, 3, 1);
 								break;
 							}
 						case 0xDB:
 							{
-								std::cout << "SET 3, E" << std::endl;
+								DEBUG_LOG("SET 3, E");
 								bitmanip(E, 3, 1);
 								break;
 							}
 						case 0xDC:
 							{
-								std::cout << "SET 3, H" << std::endl;
+								DEBUG_LOG("SET 3, H");
 								bitmanip(H, 3, 1);
 								break;
 							}
 						case 0xDD:
 							{
-								std::cout << "SET 3, L" << std::endl;
+								DEBUG_LOG("SET 3, L");
 								bitmanip(L, 3, 1);
 								break;
 							}
 						case 0xDE:
 							{
-								std::cout << "SET 3, (HL)" << std::endl;
+								DEBUG_LOG("SET 3, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 3, 1);
@@ -2493,7 +2609,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xDF:
 							{
-								std::cout << "SET 3, A" << std::endl;
+								DEBUG_LOG("SET 3, A");
 								bitmanip(A, 3, 1);
 								break;
 							}
@@ -2502,43 +2618,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0xE0:
 							{
-								std::cout << "SET 4, B" << std::endl;
+								DEBUG_LOG("SET 4, B");
 								bitmanip(B, 4, 1);
 								break;
 							}
 						case 0xE1:
 							{
-								std::cout << "SET 4, C" << std::endl;
+								DEBUG_LOG("SET 4, C");
 								bitmanip(C, 4, 1);
 								break;
 							}
 						case 0xE2:
 							{
-								std::cout << "SET 4, D" << std::endl;
+								DEBUG_LOG("SET 4, D");
 								bitmanip(D, 4, 1);
 								break;
 							}
 						case 0xE3:
 							{
-								std::cout << "SET 4, E" << std::endl;
+								DEBUG_LOG("SET 4, E");
 								bitmanip(E, 4, 1);
 								break;
 							}
 						case 0xE4:
 							{
-								std::cout << "SET 4, H" << std::endl;
+								DEBUG_LOG("SET 4, H");
 								bitmanip(H, 4, 1);
 								break;
 							}
 						case 0xE5:
 							{
-								std::cout << "SET 4, L" << std::endl;
+								DEBUG_LOG("SET 4, L");
 								bitmanip(L, 4, 1);
 								break;
 							}
 						case 0xE6:
 							{
-								std::cout << "SET 4, (HL)" << std::endl;
+								DEBUG_LOG("SET 4, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 4, 1);
@@ -2547,49 +2663,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xE7:
 							{
-								std::cout << "SET 4, A" << std::endl;
+								DEBUG_LOG("SET 4, A");
 								bitmanip(A, 4, 1);
 								break;
 							}
 						case 0xE8:
 							{
-								std::cout << "SET 5, B" << std::endl;
+								DEBUG_LOG("SET 5, B");
 								bitmanip(B, 5, 1);
 								break;
 							}
 						case 0xE9:
 							{
-								std::cout << "SET 5, C" << std::endl;
+								DEBUG_LOG("SET 5, C");
 								bitmanip(C, 5, 1);
 								break;
 							}
 						case 0xEA:
 							{
-								std::cout << "SET 5, D" << std::endl;
+								DEBUG_LOG("SET 5, D");
 								bitmanip(D, 5, 1);
 								break;
 							}
 						case 0xEB:
 							{
-								std::cout << "SET 5, E" << std::endl;
+								DEBUG_LOG("SET 5, E");
 								bitmanip(E, 5, 1);
 								break;
 							}
 						case 0xEC:
 							{
-								std::cout << "SET 5, H" << std::endl;
+								DEBUG_LOG("SET 5, H");
 								bitmanip(H, 5, 1);
 								break;
 							}
 						case 0xED:
 							{
-								std::cout << "SET 5, L" << std::endl;
+								DEBUG_LOG("SET 5, L");
 								bitmanip(L, 5, 1);
 								break;
 							}
 						case 0xEE:
 							{
-								std::cout << "SET 5, (HL)" << std::endl;
+								DEBUG_LOG("SET 5, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 5, 1);
@@ -2598,7 +2714,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xEF:
 							{
-								std::cout << "SET 5, A" << std::endl;
+								DEBUG_LOG("SET 5, A");
 								bitmanip(A, 5, 1);
 								break;
 							}
@@ -2607,43 +2723,43 @@ void TemplateScreen::Update(const double dt)
 
 						case 0xF0:
 							{
-								std::cout << "SET 6, B" << std::endl;
+								DEBUG_LOG("SET 6, B");
 								bitmanip(B, 6, 1);
 								break;
 							}
 						case 0xF1:
 							{
-								std::cout << "SET 6, C" << std::endl;
+								DEBUG_LOG("SET 6, C");
 								bitmanip(C, 6, 1);
 								break;
 							}
 						case 0xF2:
 							{
-								std::cout << "SET 6, D" << std::endl;
+								DEBUG_LOG("SET 6, D");
 								bitmanip(D, 6, 1);
 								break;
 							}
 						case 0xF3:
 							{
-								std::cout << "SET 6, E" << std::endl;
+								DEBUG_LOG("SET 6, E");
 								bitmanip(E, 6, 1);
 								break;
 							}
 						case 0xF4:
 							{
-								std::cout << "SET 6, H" << std::endl;
+								DEBUG_LOG("SET 6, H");
 								bitmanip(H, 6, 1);
 								break;
 							}
 						case 0xF5:
 							{
-								std::cout << "SET 6, L" << std::endl;
+								DEBUG_LOG("SET 6, L");
 								bitmanip(L, 6, 1);
 								break;
 							}
 						case 0xF6:
 							{
-								std::cout << "SET 6, (HL)" << std::endl;
+								DEBUG_LOG("SET 6, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 6, 1);
@@ -2652,49 +2768,49 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xF7:
 							{
-								std::cout << "SET 6, A" << std::endl;
+								DEBUG_LOG("SET 6, A");
 								bitmanip(A, 6, 1);
 								break;
 							}
 						case 0xF8:
 							{
-								std::cout << "SET 7, B" << std::endl;
+								DEBUG_LOG("SET 7, B");
 								bitmanip(B, 7, 1);
 								break;
 							}
 						case 0xF9:
 							{
-								std::cout << "SET 7, C" << std::endl;
+								DEBUG_LOG("SET 7, C");
 								bitmanip(C, 7, 1);
 								break;
 							}
 						case 0xFA:
 							{
-								std::cout << "SET 7, D" << std::endl;
+								DEBUG_LOG("SET 7, D");
 								bitmanip(D, 7, 1);
 								break;
 							}
 						case 0xFB:
 							{
-								std::cout << "SET 7, E" << std::endl;
+								DEBUG_LOG("SET 7, E");
 								bitmanip(E, 7, 1);
 								break;
 							}
 						case 0xFC:
 							{
-								std::cout << "SET 7, H" << std::endl;
+								DEBUG_LOG("SET 7, H");
 								bitmanip(H, 7, 1);
 								break;
 							}
 						case 0xFD:
 							{
-								std::cout << "SET 7, L" << std::endl;
+								DEBUG_LOG("SET 7, L");
 								bitmanip(L, 7, 1);
 								break;
 							}
 						case 0xFE:
 							{
-								std::cout << "SET 7, (HL)" << std::endl;
+								DEBUG_LOG("SET 7, (HL)");
 								unsigned int address = H << 8 | L;
 								unsigned char value = memory[address];
 								bitmanip(value, 7, 1);
@@ -2703,7 +2819,7 @@ void TemplateScreen::Update(const double dt)
 							}
 						case 0xFF:
 							{
-								std::cout << "SET 7, A" << std::endl;
+								DEBUG_LOG("SET 7, A");
 								bitmanip(A, 7, 1);
 								break;
 							}
@@ -2714,7 +2830,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "CALL a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("CALL a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					
 					if ((b3 << 8 | b2) == 0xc79b) // init runtime
 					{
@@ -2738,31 +2854,31 @@ void TemplateScreen::Update(const double dt)
 					if (PC == 0xc79b)
 					{
 						int wait = 1;
-						std::cout << "***** CALL init_runtime" << std::endl;
+						DEBUG_LOG("***** CALL init_runtime");
 					}
 					
 					if (PC == 0xc36d)
 					{
 						int wait = 1;
-						std::cout << "***** CALL console_init" << std::endl;
+						DEBUG_LOG("***** CALL console_init");
 					}
 					
 					if (PC == 0xc410)
 					{
 						int wait = 1;
-						std::cout << "***** CALL console_hide" << std::endl;
+						DEBUG_LOG("***** CALL console_hide");
 					}
 					
 					if (PC == 0xc35c)
 					{
 						int wait = 1;
-						std::cout << "***** CALL conosle_wait_vbl" << std::endl;
+						DEBUG_LOG("***** CALL conosle_wait_vbl");
 					}
 					
 					if (PC == 0xc456)
 					{
 						int wait = 1;
-						std::cout << "***** CALL conosle_scroll_up" << std::endl;
+						DEBUG_LOG("***** CALL conosle_scroll_up");
 					}
 
 					//0xc17e - call_init_testing
@@ -2777,7 +2893,7 @@ void TemplateScreen::Update(const double dt)
 			case 0xCE:
 				{
 					unsigned char b2 = memory[PC++];
-					std::cout << "ADC A, d8" << "0x" << charToHex(b2) << std::endl;
+					DEBUG_LOG("ADC A, d8" << "0x" << charToHex(b2));
 
 					signed char half = (0xF & (signed char)A) + (0xF & b2);
 					if (CFlag())
@@ -2796,7 +2912,7 @@ void TemplateScreen::Update(const double dt)
 			case 0xC9:
 			{	
 				auto address = pop16();
-				std::cout << "RET - " << "0x" << intToHex(address) << std::endl;
+				DEBUG_LOG("RET - " << "0x" << intToHex(address));
 				PC = address;
 				
 				if (PC == 0xc0cd)
@@ -2831,19 +2947,19 @@ void TemplateScreen::Update(const double dt)
 				if (CFlag())
 				{
 					//PC++;
-					std::cout << "RET NC - No jump" << std::endl;
+					DEBUG_LOG("RET NC - No jump");
 				}
 				else
 				{
 					PC = pop16();
-					std::cout << "RET NC - " << "0x" << intToHex(PC) << std::endl;
+					DEBUG_LOG("RET NC - " << "0x" << intToHex(PC));
 				}
 				break;
 			}
 			case 0xD1:
 			{
 				unsigned int value = pop16();
-				std::cout << "POP DE - " << "0x" << intToHex(value) << std::endl;
+				DEBUG_LOG("POP DE - " << "0x" << intToHex(value));
 				D = value >> 8;
 				E = value & 0xFF;
 				
@@ -2853,7 +2969,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "JP NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("JP NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					if (!CFlag())
 						PC = b3 << 8 | b2;
 
@@ -2863,7 +2979,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "CALL NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("CALL NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					if (!CFlag())
 					{
@@ -2877,14 +2993,14 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int value = D << 8 | E;
 				push16(value);
-				std::cout << "PUSH DE" << std::endl;
+				DEBUG_LOG("PUSH DE");
 				
 				break;
 			}
 			case 0xD6:
 			{
 				unsigned char b2 = memory[PC++];
-				std::cout << "SUB d8 - " << "0x" << charToHex(b2) << std::endl;
+				DEBUG_LOG("SUB d8 - " << "0x" << charToHex(b2));
 				
 				bool carry = ((signed char)A - (signed char)b2) > 0;
 				signed char half = (0xF & (signed char)A) - (0xF & b2);
@@ -2899,10 +3015,23 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xD8:
+			{
+				if (!CFlag())
+				{
+					DEBUG_LOG("RET C - No jump");
+				}
+				else
+				{
+					PC = pop16();
+					DEBUG_LOG("RET C - " << "0x" << intToHex(PC));
+				}
+				break;
+			}
 			case 0xE0:
 				{
 					unsigned char b2 = memory[PC++];
-					std::cout << "LD (a8), A - " << "0xFF" << charToHex(b2) << std::endl;
+					DEBUG_LOG("LD (a8), A - " << "0xFF" << charToHex(b2));
 					unsigned int address = 0xFF << 8 | b2;
 					memory[address] = A;
 					
@@ -2911,7 +3040,7 @@ void TemplateScreen::Update(const double dt)
 			case 0xE1:
 				{
 					unsigned int value = pop16();
-					std::cout << "POP HL - " << "0x" << intToHex(value) << std::endl;
+					DEBUG_LOG("POP HL - " << "0x" << intToHex(value));
 					H = value >> 8;
 					L = value & 0xFF;
 					//PC++;
@@ -2921,7 +3050,7 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xE9:
 				{
-					std::cout << "JP HL" << std::endl;
+					DEBUG_LOG("JP HL");
 					unsigned int address = H << 8 | L;
 					PC = address;
 
@@ -2931,7 +3060,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					unsigned char b2 = memory[PC++];
 					unsigned char b3 = memory[PC++];
-					std::cout << "LD (a16), A - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+					DEBUG_LOG("LD (a16), A - " << "0x" << charToHex(b3) << charToHex(b2));
 					unsigned int address = b3 << 8 | b2;
 					memory[address] = A;
 					
@@ -2941,7 +3070,7 @@ void TemplateScreen::Update(const double dt)
 			case 0xE5:
 				{
 					unsigned int HL = H << 8 | L;
-					std::cout << "PUSH HL - " << "0x" << intToHex(HL) << std::endl;
+					DEBUG_LOG("PUSH HL - " << "0x" << intToHex(HL));
 					push16(HL);
 
 					break;
@@ -2949,7 +3078,7 @@ void TemplateScreen::Update(const double dt)
 			case 0xE6:
 			{
 				unsigned char b2 = memory[PC++];
-				std::cout << "AND d8 - " << "0x" << charToHex(b2) << std::endl;
+				DEBUG_LOG("AND d8 - " << "0x" << charToHex(b2));
 				
 				A = A & b2;
 				
@@ -2962,7 +3091,7 @@ void TemplateScreen::Update(const double dt)
 			}
 			case 0xEE:
 			{
-				std::cout << "XOR d8" << std::endl;
+				DEBUG_LOG("XOR d8");
 				xorA(memory[PC++]);
 				
 				break;
@@ -2970,7 +3099,7 @@ void TemplateScreen::Update(const double dt)
 			case 0xF0:
 			{
 				unsigned char b2 = memory[PC++];
-				std::cout << "LD A, (a8) - " << "0xFF" << charToHex(b2) << std::endl;
+				DEBUG_LOG("LD A, (a8) - " << "0xFF" << charToHex(b2));
 				A = memory[0xFF00 + b2];
 				
 				break;
@@ -2978,16 +3107,16 @@ void TemplateScreen::Update(const double dt)
 			case 0xF1:
 			{
 				unsigned int value = pop16();
-				std::cout << "POP AF - " << "0x" << intToHex(value) << std::endl;
+				DEBUG_LOG("POP AF - " << "0x" << intToHex(value));
 				A = value >> 8;
-				F = value & 0xFF;
+				F = value & 0xF0;
 
 				break;
 			}
 			case 0xF3:
 				{
 					IME = false;
-					std::cout << "DI - IME DISABLED" << std::endl;
+					DEBUG_LOG("DI - IME DISABLED");
 					
 					break;
 				}
@@ -2995,14 +3124,14 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned int value = A << 8 | F;
 				push16(value);
-				std::cout << "PUSH AF" << std::endl;
+				DEBUG_LOG("PUSH AF");
 				
 				break;
 			}
 			case 0xF6:
 			{
 				unsigned char b2 = memory[PC++];
-				std::cout << "OR d8 - " << "0x" << charToHex(b2) << std::endl;
+				DEBUG_LOG("OR d8 - " << "0x" << charToHex(b2));
 				
 				A = A | b2;
 				
@@ -3017,7 +3146,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				unsigned char b2 = memory[PC++];
 				unsigned char b3 = memory[PC++];
-				std::cout << "LOAD A (a16) - " << "0x" << charToHex(b3) << charToHex(b2) << std::endl;
+				DEBUG_LOG("LOAD A (a16) - " << "0x" << charToHex(b3) << charToHex(b2));
 				
 				unsigned int address = b3 << 8 | b2;
 				A = memory[address];
@@ -3028,7 +3157,7 @@ void TemplateScreen::Update(const double dt)
 			{
 				signed char b2 = memory[PC++];
 				signed char result = (signed char)A - b2;
-				std::cout << "CP d8 - " << charToHex(result) << std::endl;
+				DEBUG_LOG("CP d8 - " << charToHex(result));
 				
 				setZ(result == 0);
 				setN(true);
@@ -3045,11 +3174,11 @@ void TemplateScreen::Update(const double dt)
 		//m_continue = false;
 	}
 	
-	static unsigned char FB = memory[0xFF01];
-	
-	if (FB != memory[0xFF01])
+	if ((unsigned char)memory[SC] == 0x81)
 	{
-		int yurt = 1;
+		unsigned char value = memory[SB];
+		memory[SC] = 0x00;
+		std::cout << value;
 	}
 }
 
