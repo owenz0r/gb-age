@@ -12,12 +12,11 @@
 //#define DEBUG_PRINT
 
 #ifdef DEBUG_PRINT
-#define DEBUG_LOG(x) std::cout << x << std::endl
+#define DEBUG_LOG(x) std::cout << x << '\n'
 #else
 #define DEBUG_LOG(x)
 #endif
 
-#define DEBUG 1
 constexpr int display_width = 160;
 constexpr int display_height = 144;
 constexpr int display_size = display_width * display_height;
@@ -135,6 +134,14 @@ static void inc16(unsigned char& high, unsigned char& low)
 	high = value >> 8;
 }
 
+static void dec16(unsigned char& high, unsigned char& low)
+{
+	unsigned int value = high << 8 | low;
+	value--;
+	low = value & 0xFF;
+	high = value >> 8;
+}
+
 static void dec8(unsigned char& reg)
 {
 	reg--;
@@ -142,6 +149,18 @@ static void dec8(unsigned char& reg)
 	setZ(reg == 0);
 	setN(true);
 	setH((reg & 0x0F) == 0x0F);
+}
+
+static void sub8(unsigned char& r1, unsigned char& r2, int carry=0)
+{
+	setC((r2 + carry) > r1);
+	signed char half = (0xF & (signed char)r1) - (0xF & r2) - carry;
+	setH(half < 0);
+	
+	r1 = r1 - r2 - carry;
+	
+	setZ(r1 == 0);
+	setN(true);
 }
 
 static void add16(unsigned char& h1,
@@ -367,7 +386,13 @@ void TemplateScreen::Init()
 #ifdef WIN32
 	std::string path = "Z:/downloads/01-special.gb";
 #else
-	std::string path = "/Users/owenz0r/Downloads/01-special.gb";
+	//std::string path = "/Users/owenz0r/Downloads/01-special.gb";
+	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb";
+	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb";
+	//std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
+	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";
+	//std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
+	std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -465,10 +490,29 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x08:
+			{
+				DEBUG_LOG("LD (a16), SP");
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				unsigned int address = b3 << 8 | b2;
+				
+				memory[address] = SP & 0x00FF;
+				memory[address + 1] = SP >> 8;
+				
+				break;
+			}
 			case 0x09:
 			{
 				DEBUG_LOG("ADD HL, BC");
 				add16(H, L, B, C);
+				
+				break;
+			}
+			case 0x0B:
+			{
+				DEBUG_LOG("DEC BC");
+				dec16(B, C);
 				
 				break;
 			}
@@ -583,6 +627,13 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x1B:
+			{
+				DEBUG_LOG("DEC DE");
+				dec16(D, E);
+				
+				break;
+			}
 			case 0x1C:
 				{
 					DEBUG_LOG("INC E");
@@ -593,6 +644,14 @@ void TemplateScreen::Update(const double dt)
 			{
 				DEBUG_LOG("DEC E");
 				dec8(E);
+				
+				break;
+			}
+			case 0x1E:
+			{
+				unsigned char b2 = memory[PC++];
+				DEBUG_LOG("LOAD E, d8 - " << charToHex(b2));
+				E = b2;
 				
 				break;
 			}
@@ -695,6 +754,38 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x27:
+			{
+				DEBUG_LOG("DAA");
+				unsigned char adjust = 0x00;
+				std::cout << "A - " << std::hex << (int)A << std::endl;
+				if (NFlag())
+				{
+					if (HFlag())
+						adjust += 0x06;
+					if (CFlag())
+						adjust += 0x60;
+					A = A - adjust;
+				}
+				else
+				{
+					if (HFlag() || (A & 0x0F) > 0x09)
+						adjust += 0x06;
+					if (CFlag() || A > 0x99)
+					{
+						adjust += 0x60;
+						setC(true);
+					}
+					A = A + adjust;
+				}
+				
+				std::cout << "A - " << std::hex << (int)A << std::endl;
+				
+				setZ(A == 0);
+				setH(false);
+				
+				break;
+			}
 			case 0x28:
 			{
 				DEBUG_LOG("JR Z, s8");
@@ -727,6 +818,13 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0x2B:
+			{
+				DEBUG_LOG("DEC HL");
+				dec16(H, L);
+				
+				break;
+			}
 			case 0x2C:
 				{
 					DEBUG_LOG("INC L");
@@ -738,6 +836,21 @@ void TemplateScreen::Update(const double dt)
 			{
 				DEBUG_LOG("DEC L");
 				dec8(L);
+				
+				break;
+			}
+			case 0x2E:
+			{
+				unsigned char b2 = memory[PC++];
+				DEBUG_LOG("LOAD L, d8 - " << charToHex(b2));
+				L = b2;
+				
+				break;
+			}
+			case 0x2F:
+			{
+				DEBUG_LOG("CPL");
+				A = ~A;
 				
 				break;
 			}
@@ -820,6 +933,16 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x37:
+			{
+				DEBUG_LOG("SCF");
+				
+				setC(true);
+				setN(false);
+				setH(false);
+				
+				break;
+			}
 			case 0x38:
 			{
 				DEBUG_LOG("JR C, s8");
@@ -851,6 +974,16 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x3B:
+			{
+				DEBUG_LOG("DEC SP");
+				unsigned char high = SP >> 8;
+				unsigned char low = SP & 0x0F;
+				dec16(high, low);
+				SP = high << 8 | low;
+				
+				break;
+			}
 			case 0x3C:
 				{
 					DEBUG_LOG("INC A");
@@ -868,14 +1001,18 @@ void TemplateScreen::Update(const double dt)
 			case 0x3E:
 				{
 					unsigned char b2 = memory[PC++];
-					
 					DEBUG_LOG("LOAD A, d8");
-					
 					A = b2;
 					
-					//setZ(A == 0);
 					break;
 				}
+			case 0x3F:
+			{
+				DEBUG_LOG("CCF");
+				setC(!CFlag());
+				
+				break;
+			}
 			case 0x40:
 				{
 					B = B;
@@ -1331,6 +1468,63 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0x98:
+			{
+				DEBUG_LOG("SBC A, B");
+				sub8(A, B, CFlag());
+				
+				break;
+			}
+			case 0x99:
+			{
+				DEBUG_LOG("SBC A, C");
+				sub8(A, C, CFlag());
+				
+				break;
+			}
+			case 0x9A:
+			{
+				DEBUG_LOG("SBC A, D");
+				sub8(A, D, CFlag());
+				
+				break;
+			}
+			case 0x9B:
+			{
+				DEBUG_LOG("SBC A, E");
+				sub8(A, E, CFlag());
+				
+				break;
+			}
+			case 0x9C:
+			{
+				DEBUG_LOG("SBC A, H");
+				sub8(A, H, CFlag());
+				
+				break;
+			}
+			case 0x9D:
+			{
+				DEBUG_LOG("SBC A, L");
+				sub8(A, L, CFlag());
+				
+				break;
+			}
+			case 0x9E:
+			{
+				DEBUG_LOG("SBC A, (HL)");
+				unsigned char value = memory[H << 8 | L];
+				sub8(A, value, CFlag());
+				
+				break;
+			}
+			case 0x9F:
+			{
+				DEBUG_LOG("SBC A, A");
+				sub8(A, A, CFlag());
+				
+				break;
+			}
 			case 0xA8:
 			{
 				DEBUG_LOG("XOR B");
@@ -1603,6 +1797,16 @@ void TemplateScreen::Update(const double dt)
 					PC = pop16();
 					DEBUG_LOG("RET Z - " << "0x" << intToHex(PC));
 				}
+				break;
+			}
+			case 0xCA:
+			{
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				DEBUG_LOG("JP Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+				if (ZFlag())
+					PC = b3 << 8 | b2;
+				
 				break;
 			}
 			case 0xCB:
@@ -2826,6 +3030,20 @@ void TemplateScreen::Update(const double dt)
 					}
 					break;
 			}
+			case 0xCC:
+			{
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				DEBUG_LOG("CALL Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+				
+				if (ZFlag())
+				{
+					push16(PC);
+					PC = b3 << 8 | b2;
+				}
+				
+				break;
+			}
 			case 0xCD:
 				{
 					unsigned char b2 = memory[PC++];
@@ -2935,7 +3153,7 @@ void TemplateScreen::Update(const double dt)
 					int yurt = 1;
 				}
 				
-				if (PC == 0xc401) // console_waitvbl
+				if (PC == 0xc342) // console_waitvbl
 				{
 					int yurt = 1;
 				}
@@ -3026,6 +3244,30 @@ void TemplateScreen::Update(const double dt)
 					PC = pop16();
 					DEBUG_LOG("RET C - " << "0x" << intToHex(PC));
 				}
+				break;
+			}
+			case 0xDA:
+			{
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				DEBUG_LOG("JP C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+				if (CFlag())
+					PC = b3 << 8 | b2;
+				
+				break;
+			}
+			case 0xDC:
+			{
+				unsigned char b2 = memory[PC++];
+				unsigned char b3 = memory[PC++];
+				DEBUG_LOG("CALL C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+				
+				if (CFlag())
+				{
+					push16(PC);
+					PC = b3 << 8 | b2;
+				}
+				
 				break;
 			}
 			case 0xE0:
@@ -3139,6 +3381,14 @@ void TemplateScreen::Update(const double dt)
 				setN(false);
 				setH(false);
 				setC(false);
+				
+				break;
+			}
+			case 0xF9:
+			{
+				DEBUG_LOG("LD SP, HL");
+				
+				SP = H << 8 | L;
 				
 				break;
 			}
