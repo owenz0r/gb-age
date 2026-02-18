@@ -5,11 +5,12 @@
 #include "core/ResourceManager.h"
 #include "core/Utils.h"
 
+#include <assert.h>
 #include <iostream>
 #include <sstream>
-#include <assert.h>
+#include <fstream>
 
-//#define DEBUG_PRINT
+// #define DEBUG_PRINT
 
 #ifdef DEBUG_PRINT
 #define DEBUG_LOG(x) std::cout << x << '\n'
@@ -45,6 +46,33 @@ constexpr unsigned int SB = 0xFF01;
 constexpr unsigned int SC = 0xFF02;
 
 static std::string console = "";
+static std::ofstream logfile;
+
+static unsigned char read_memory(const unsigned int address)
+{
+	if (address == 0xFF44)
+		return 0x90;
+	return memory[address];
+}
+
+static void print_status()
+{
+	logfile << std::hex << std::setfill('0') << std::uppercase;
+	logfile << "A:" << std::setw(2) << (int)A << " ";
+	logfile << "F:" << std::setw(2) << (int)F << " ";
+	logfile << "B:" << std::setw(2) << (int)B << " ";
+	logfile << "C:" << std::setw(2) << (int)C << " ";
+	logfile << "D:" << std::setw(2) << (int)D << " ";
+	logfile << "E:" << std::setw(2) << (int)E << " ";
+	logfile << "H:" << std::setw(2) << (int)H << " ";
+	logfile << "L:" << std::setw(2) << (int)L << " ";
+	
+	logfile << "SP:" << std::setw(4) << (int)SP << " ";
+	logfile << "PC:" << std::setw(4) << (int)PC << " ";
+	
+	logfile << "PCMEM:" << std::setw(2) << (int)read_memory(PC) << "," << std::setw(2) <<  (int)read_memory(PC + 1) << ","
+	<< std::setw(2) <<  (int)read_memory(PC + 2) << "," << std::setw(2) <<  (int)read_memory(PC + 3) << std::endl;
+}
 
 static std::string charToHex(unsigned char c)
 {
@@ -60,44 +88,44 @@ static std::string intToHex(int i)
 	return ss.str();
 }
 
-static bool ZFlag()
-{
-	return F & 0x01;
-}
-
-static void setZ(bool state)
-{
-	state == true ? F = F | 0x01 : F = F & 0xFE;
-}
-
-static bool NFlag()
-{
-	return F & 0x02;
-}
-
-static void setN(bool state)
-{
-	state == true ? F = F | 0x02 : F = F & 0xFD;
-}
-
-static bool HFlag()
-{
-	return F & 0x04;
-}
-
-static void setH(bool state)
-{
-	state == true ? F = F | 0x04 : F = F & 0xFB;
-}
-
 static bool CFlag()
 {
-	return F & 0x08;
+	return F & 0x10;
 }
 
 static void setC(bool state)
 {
-	state == true ? F = F | 0x08 : F = F & 0xF7;
+	state == true ? F = F | 0x10 : F = F & 0xE0;
+}
+
+static bool HFlag()
+{
+	return F & 0x20;
+}
+
+static void setH(bool state)
+{
+	state == true ? F = F | 0x20 : F = F & 0xD0;
+}
+
+static bool NFlag()
+{
+	return F & 0x40;
+}
+
+static void setN(bool state)
+{
+	state == true ? F = F | 0x40 : F = F & 0xB0;
+}
+
+static bool ZFlag()
+{
+	return F & 0x80;
+}
+
+static void setZ(bool state)
+{
+	state == true ? F = F | 0x80 : F = F & 0x70;
 }
 
 static void push16(const unsigned int value)
@@ -111,19 +139,19 @@ static void push16(const unsigned int value)
 
 static unsigned int pop16()
 {
-	unsigned char b2 = memory[SP++];
-	unsigned char b3 = memory[SP++];
-	
+	unsigned char b2 = read_memory(SP++);
+	unsigned char b3 = read_memory(SP++);
+
 	return b3 << 8 | b2;
 }
 
 static void inc8(unsigned char& reg)
 {
+	setH((reg & 0x0F) == 0x0F);
 	reg++;
 
 	setZ(reg == 0);
 	setN(false);
-	setH(reg == 0x10);
 }
 
 static void inc16(unsigned char& high, unsigned char& low)
@@ -151,48 +179,43 @@ static void dec8(unsigned char& reg)
 	setH((reg & 0x0F) == 0x0F);
 }
 
-static void sub8(unsigned char& r1, unsigned char& r2, int carry=0)
+static void sub8(unsigned char& r1, unsigned char& r2, int carry = 0)
 {
 	setC((r2 + carry) > r1);
 	signed char half = (0xF & (signed char)r1) - (0xF & r2) - carry;
 	setH(half < 0);
-	
+
 	r1 = r1 - r2 - carry;
-	
+
 	setZ(r1 == 0);
 	setN(true);
 }
 
-static void add16(unsigned char& h1,
-				  unsigned char& l1,
-				  unsigned int& v2)
+static void add16(unsigned char& h1, unsigned char& l1, unsigned int& v2)
 {
 	unsigned int v1 = h1 << 8 | l1;
 	unsigned int result = v1 + v2;
-	
+
 	setN(false);
 	setC(result > 0xFFFF);
 	signed char half = (0xF & (signed char)h1) + ((0xF00 & v2) >> 8);
 	setH(half > 0xF);
-	
+
 	h1 = (result & 0xFF00) >> 8;
 	l1 = result & 0xFF;
 }
 
-static void add16(unsigned char& h1,
-				  unsigned char& l1,
-				  unsigned char& h2,
-				  unsigned char& l2)
+static void add16(unsigned char& h1, unsigned char& l1, unsigned char& h2, unsigned char& l2)
 {
 	unsigned int v1 = h1 << 8 | l1;
 	unsigned int v2 = h2 << 8 | l2;
 	unsigned int result = v1 + v2;
-	
+
 	setN(false);
 	setC(result > 0xFFFF);
 	signed char half = (0xF & (signed char)h1) + (0xF & h2);
 	setH(half > 0xF);
-	
+
 	h1 = (result & 0xFF00) >> 8;
 	l1 = result & 0xFF;
 }
@@ -200,6 +223,16 @@ static void add16(unsigned char& h1,
 static void xorA(unsigned char other)
 {
 	A = A ^ other;
+
+	setZ(A == 0);
+	setN(false);
+	setH(false);
+	setC(false);
+}
+
+static void orA(unsigned char other)
+{
+	A = A | other;
 	
 	setZ(A == 0);
 	setN(false);
@@ -240,7 +273,7 @@ static void SLA(unsigned char& reg)
 	{
 		setC(false);
 	}
-	
+
 	setZ(reg == 0);
 	setH(false);
 	setN(false);
@@ -250,7 +283,7 @@ static void SRA(unsigned char& reg)
 {
 	unsigned int value = reg;
 	value = value >> 1;
-	
+
 	if (reg & 0x01)
 	{
 		setC(true);
@@ -259,14 +292,14 @@ static void SRA(unsigned char& reg)
 	{
 		setC(false);
 	}
-	
+
 	if (reg & 0x80)
 	{
 		value = value | 0x80;
 	}
-	
+
 	reg = value & 0xFF;
-	
+
 	setZ(reg == 0);
 	setH(false);
 	setN(false);
@@ -318,10 +351,10 @@ static void RL(unsigned char& reg)
 {
 	unsigned int value = reg;
 	value = value << 1;
-	
+
 	if (CFlag())
 		value = value | 0x01;
-	
+
 	reg = value & 0xFF;
 
 	if ((value & 0x0100) == 0x0100)
@@ -342,10 +375,10 @@ static void RR(unsigned char& reg)
 {
 	unsigned int value = reg;
 	value = value >> 1;
-	
+
 	if (CFlag())
 		value = value | 0x80;
-	
+
 	if (reg & 0x01)
 	{
 		setC(true);
@@ -354,20 +387,20 @@ static void RR(unsigned char& reg)
 	{
 		setC(false);
 	}
-	
+
 	reg = value & 0xFF;
-	
+
 	setZ(reg == 0);
 	setH(false);
 	setN(false);
 }
 
-static void compareWithA(unsigned char &value)
+static void compareWithA(unsigned char& value)
 {
 	unsigned char result = A - value;
 	setZ(result == 0);
 	setN(true);
-	
+
 	signed char half = (0xF & (signed char)A) - (0xF & value);
 	setH(half < 0);
 	setC(value > A);
@@ -386,13 +419,13 @@ void TemplateScreen::Init()
 #ifdef WIN32
 	std::string path = "Z:/downloads/01-special.gb";
 #else
-	//std::string path = "/Users/owenz0r/Downloads/01-special.gb";
-	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb";
-	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb";
-	//std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
-	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";
-	//std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
-	std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	std::string path = "/Users/owenz0r/Downloads/01-special.gb";
+	// std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb";
+	// std::string path = "/Users/owenz0r/Downloads/05-op rp.gb";
+	// std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
+	// std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";
+	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
+	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -411,7 +444,28 @@ void TemplateScreen::Init()
 	}
 	else
 	{
-		DEBUG_LOG("No ROM found - " << path);
+		std::cout << "No ROM found - " << path << std::endl;
+	}
+
+	// for gameboy doctor
+	// this should be the initial state of the registers after boot rom
+
+	A = 0x01;
+	F = 0xB0;
+	B = 0x00;
+	C = 0x13;
+	D = 0x00;
+	E = 0xD8;
+	H = 0x01;
+	L = 0x4D;
+	SP = 0xFFFE;
+	PC = 0x0100;
+	
+	logfile.open("log.txt");
+	if (!logfile.is_open())
+	{
+		std::cout << "Failed to open log file" << std::endl;
+		return false;
 	}
 }
 
@@ -419,15 +473,17 @@ void TemplateScreen::Update(const double dt)
 {
 	if (m_continue)
 	{
+		print_status();
+		
 		static int count = 0;
 		DEBUG_LOG(std::dec << count++ << " PC 0x" << std::hex << PC << " - ");
-		unsigned char b1 = memory[PC++];
+		unsigned char b1 = read_memory(PC++);
 
 		// unsigned char n1 = (b1 >> 4) & 0x0F;
 		// unsigned char n2 = b1 & 0x0F;
 
 		DEBUG_LOG(std::hex << int(b1));
-		
+
 		static int icount = 0;
 		DEBUG_LOG("instruction - " << std::dec << icount++);
 
@@ -439,90 +495,90 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0x01:
-			{
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				DEBUG_LOG("LOAD BC d16 - " << "0x" << charToHex(b3) << charToHex(b2));
-				
-				if (b3 == 0x12)
 				{
-					int yurt = 1;
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					DEBUG_LOG("LOAD BC d16 - " << "0x" << charToHex(b3) << charToHex(b2));
+
+					if (b3 == 0x12)
+					{
+						int yurt = 1;
+					}
+
+					B = b3;
+					C = b2;
+
+					break;
 				}
-				
-				B = b3;
-				C = b2;
-				
-				break;
-			}
 			case 0x02:
 				{
 					DEBUG_LOG("LD (BC), A");
 					unsigned int address = B << 8 | C;
 					memory[address] = A;
-					
+
 					break;
 				}
 			case 0x03:
-			{
-				DEBUG_LOG("INC BC");
-				inc16(B, C);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("INC BC");
+					inc16(B, C);
+
+					break;
+				}
 			case 0x04:
-			{
-				DEBUG_LOG("INC B");
-				inc8(B);
+				{
+					DEBUG_LOG("INC B");
+					inc8(B);
 
-				break;
-			}
+					break;
+				}
 			case 0x05:
-			{
-				DEBUG_LOG("DEC B");
-				dec8(B);
+				{
+					DEBUG_LOG("DEC B");
+					dec8(B);
 
-				break;
-			}
+					break;
+				}
 			case 0x06:
-			{
-				DEBUG_LOG("LD B, d8");
-				B = memory[PC++];
-				
-				break;
-			}
+				{
+					DEBUG_LOG("LD B, d8");
+					B = read_memory(PC++);
+
+					break;
+				}
 			case 0x08:
-			{
-				DEBUG_LOG("LD (a16), SP");
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				unsigned int address = b3 << 8 | b2;
-				
-				memory[address] = SP & 0x00FF;
-				memory[address + 1] = SP >> 8;
-				
-				break;
-			}
+				{
+					DEBUG_LOG("LD (a16), SP");
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					unsigned int address = b3 << 8 | b2;
+
+					memory[address] = SP & 0x00FF;
+					memory[address + 1] = SP >> 8;
+
+					break;
+				}
 			case 0x09:
-			{
-				DEBUG_LOG("ADD HL, BC");
-				add16(H, L, B, C);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("ADD HL, BC");
+					add16(H, L, B, C);
+
+					break;
+				}
 			case 0x0B:
-			{
-				DEBUG_LOG("DEC BC");
-				dec16(B, C);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC BC");
+					dec16(B, C);
+
+					break;
+				}
 			case 0x0C:
-			{
-				DEBUG_LOG("INC C");
-				inc8(C);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("INC C");
+					inc8(C);
+
+					break;
+				}
 			case 0x0D:
 				{
 					DEBUG_LOG("DEC C");
@@ -531,32 +587,32 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0x0A:
-			{
-				unsigned int address = B << 8 | C;
-				A = memory[address];
-				DEBUG_LOG("LOAD A, (BC) - " << charToHex(address));
-				
-				break;
-			}
+				{
+					unsigned int address = B << 8 | C;
+					A = read_memory(address);
+					DEBUG_LOG("LOAD A, (BC) - " << charToHex(address));
+
+					break;
+				}
 			case 0x0E:
 				{
-					unsigned char b2 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
 					DEBUG_LOG("LOAD C, d8 - " << charToHex(b2));
 					C = b2;
 
 					break;
 				}
 			case 0x0F:
-			{
-				DEBUG_LOG("RRCA");
-				RRC(A);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("RRCA");
+					RRC(A);
+
+					break;
+				}
 			case 0x11:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("LOAD DE d16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					D = b3;
@@ -571,16 +627,16 @@ void TemplateScreen::Update(const double dt)
 					unsigned int address = D << 8 | E;
 					memory[address] = A;
 
-					//setZ(A == 0);
+					// setZ(A == 0);
 					break;
 				}
 			case 0x13:
-			{
-				DEBUG_LOG("INC DE");
-				inc16(D, E);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("INC DE");
+					inc16(D, E);
+
+					break;
+				}
 			case 0x14:
 				{
 					DEBUG_LOG("INC D");
@@ -589,51 +645,51 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0x15:
-			{
-				DEBUG_LOG("DEC D");
-				dec8(D);
+				{
+					DEBUG_LOG("DEC D");
+					dec8(D);
 
-				break;
-			}
+					break;
+				}
 			case 0x16:
-			{
-				DEBUG_LOG("LD D, d8");
-				D = memory[PC++];
-				
-				break;
-			}
+				{
+					DEBUG_LOG("LD D, d8");
+					D = read_memory(PC++);
+
+					break;
+				}
 			case 0x18:
 				{
 					DEBUG_LOG("JR s8");
-					char b2 = memory[PC++];
-					
+					char b2 = read_memory(PC++);
+
 					PC += b2;
 					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
-					
+
 					break;
 				}
 			case 0x19:
-			{
-				DEBUG_LOG("ADD HL, DE");
-				add16(H, L, D, E);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("ADD HL, DE");
+					add16(H, L, D, E);
+
+					break;
+				}
 			case 0x1A:
-			{
-				unsigned int address = D << 8 | E;
-				A = memory[address];
-				DEBUG_LOG("LOAD A, (DE) - " << charToHex(address));
-				
-				break;
-			}
+				{
+					unsigned int address = D << 8 | E;
+					A = read_memory(address);
+					DEBUG_LOG("LOAD A, (DE) - " << charToHex(address));
+
+					break;
+				}
 			case 0x1B:
-			{
-				DEBUG_LOG("DEC DE");
-				dec16(D, E);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC DE");
+					dec16(D, E);
+
+					break;
+				}
 			case 0x1C:
 				{
 					DEBUG_LOG("INC E");
@@ -641,24 +697,24 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0x1D:
-			{
-				DEBUG_LOG("DEC E");
-				dec8(E);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC E");
+					dec8(E);
+
+					break;
+				}
 			case 0x1E:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("LOAD E, d8 - " << charToHex(b2));
-				E = b2;
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("LOAD E, d8 - " << charToHex(b2));
+					E = b2;
+
+					break;
+				}
 			case 0x1F:
 				{
 					DEBUG_LOG("RRA");
-					
+
 					unsigned int value = A;
 					value = value >> 1;
 
@@ -685,11 +741,11 @@ void TemplateScreen::Update(const double dt)
 			case 0x20:
 				{
 					DEBUG_LOG("JR NZ, s8");
-					char b2 = memory[PC++];
-					
+					char b2 = read_memory(PC++);
+
 					if (!ZFlag())
 					{
-						
+
 						PC += b2;
 						DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 					}
@@ -701,8 +757,8 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0x21:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("LOAD HL d16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					if (PC == 0xc246)
@@ -720,111 +776,111 @@ void TemplateScreen::Update(const double dt)
 					DEBUG_LOG("LD (HL+), A");
 					unsigned int address = H << 8 | L;
 					memory[address++] = A;
-					
+
 					L = address & 0xFF;
 					H = address >> 8;
-					
+
 					break;
 				}
 			case 0x23:
-			{
-				DEBUG_LOG("INC HL");
-				inc16(H, L);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("INC HL");
+					inc16(H, L);
+
+					break;
+				}
 			case 0x24:
-			{
-				DEBUG_LOG("INC H");
-				inc8(H);
+				{
+					DEBUG_LOG("INC H");
+					inc8(H);
 
-				break;
-			}
+					break;
+				}
 			case 0x25:
-			{
-				DEBUG_LOG("DEC H");
-				dec8(H);
+				{
+					DEBUG_LOG("DEC H");
+					dec8(H);
 
-				break;
-			}
+					break;
+				}
 			case 0x26:
-			{
-				DEBUG_LOG("LD H, d8");
-				H = memory[PC++];
-				
-				break;
-			}
+				{
+					DEBUG_LOG("LD H, d8");
+					H = read_memory(PC++);
+
+					break;
+				}
 			case 0x27:
-			{
-				DEBUG_LOG("DAA");
-				unsigned char adjust = 0x00;
-				std::cout << "A - " << std::hex << (int)A << std::endl;
-				if (NFlag())
 				{
-					if (HFlag())
-						adjust += 0x06;
-					if (CFlag())
-						adjust += 0x60;
-					A = A - adjust;
-				}
-				else
-				{
-					if (HFlag() || (A & 0x0F) > 0x09)
-						adjust += 0x06;
-					if (CFlag() || A > 0x99)
+					DEBUG_LOG("DAA");
+					unsigned char adjust = 0x00;
+					std::cout << "A - " << std::hex << (int)A << std::endl;
+					if (NFlag())
 					{
-						adjust += 0x60;
-						setC(true);
+						if (HFlag())
+							adjust += 0x06;
+						if (CFlag())
+							adjust += 0x60;
+						A = A - adjust;
 					}
-					A = A + adjust;
+					else
+					{
+						if (HFlag() || (A & 0x0F) > 0x09)
+							adjust += 0x06;
+						if (CFlag() || A > 0x99)
+						{
+							adjust += 0x60;
+							setC(true);
+						}
+						A = A + adjust;
+					}
+
+					std::cout << "A - " << std::hex << (int)A << std::endl;
+
+					setZ(A == 0);
+					setH(false);
+
+					break;
 				}
-				
-				std::cout << "A - " << std::hex << (int)A << std::endl;
-				
-				setZ(A == 0);
-				setH(false);
-				
-				break;
-			}
 			case 0x28:
-			{
-				DEBUG_LOG("JR Z, s8");
-				char b2 = memory[PC++];
-				
-				if (ZFlag())
 				{
-					
-					PC += b2;
-					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
+					DEBUG_LOG("JR Z, s8");
+					char b2 = read_memory(PC++);
+
+					if (ZFlag())
+					{
+
+						PC += b2;
+						DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
+					}
+					break;
 				}
-				break;
-			}
 			case 0x29:
-			{
-				DEBUG_LOG("ADD HL, HL");
-				add16(H, L, H, L);
-				
-				break;
-			}
-				
+				{
+					DEBUG_LOG("ADD HL, HL");
+					add16(H, L, H, L);
+
+					break;
+				}
+
 			case 0x2A:
 				{
 					DEBUG_LOG("LOAD A, (HL+)");
 
 					unsigned int address = H << 8 | L;
-					A = memory[address++];
+					A = read_memory(address++);
 					L = address & 0xFF;
 					H = address >> 8;
 
 					break;
 				}
 			case 0x2B:
-			{
-				DEBUG_LOG("DEC HL");
-				dec16(H, L);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC HL");
+					dec16(H, L);
+
+					break;
+				}
 			case 0x2C:
 				{
 					DEBUG_LOG("INC L");
@@ -833,31 +889,31 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0x2D:
-			{
-				DEBUG_LOG("DEC L");
-				dec8(L);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC L");
+					dec8(L);
+
+					break;
+				}
 			case 0x2E:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("LOAD L, d8 - " << charToHex(b2));
-				L = b2;
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("LOAD L, d8 - " << charToHex(b2));
+					L = b2;
+
+					break;
+				}
 			case 0x2F:
-			{
-				DEBUG_LOG("CPL");
-				A = ~A;
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CPL");
+					A = ~A;
+
+					break;
+				}
 			case 0x30:
 				{
 					DEBUG_LOG("JR NC, s8");
-					char b2 = memory[PC++];
+					char b2 = read_memory(PC++);
 
 					if (!CFlag())
 					{
@@ -874,116 +930,116 @@ void TemplateScreen::Update(const double dt)
 
 			case 0x31:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
-					
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+
 					DEBUG_LOG("LOAD SP, d16");
-					
+
 					SP = b3 << 8 | b2;
-					
-					//setZ(A == 0);
+
+					// setZ(A == 0);
 					break;
 				}
 			case 0x32:
-			{
-				DEBUG_LOG("LD (HL-), A");
-				unsigned int address = H << 8 | L;
-				memory[address--] = A;
-				
-				L = address & 0xFF;
-				H = address >> 8;
-				
-				break;
-			}
-			case 0x33:
-			{
-				DEBUG_LOG("INC SP");
-				SP++;
-				
-				break;
-			}
-			case 0x34:
-			{
-				DEBUG_LOG("INC (HL)");
-				
-				unsigned int address = H << 8 | L;
-				memory[address]++;
-				
-				setZ(memory[address] == 0);
-				setN(false);
-				break;
-			}
-			case 0x35:
-			{
-				DEBUG_LOG("DEC (HL)");
-				
-				unsigned int address = H << 8 | L;
-				memory[address]--;
-				
-				setZ(memory[address] == 0);
-				setN(false);
-				break;
-			}
-			case 0x36:
-			{
-				DEBUG_LOG("LD (HL), d8");
-				
-				unsigned int address = H << 8 | L;
-				memory[address] = memory[PC++];
-				
-				break;
-			}
-			case 0x37:
-			{
-				DEBUG_LOG("SCF");
-				
-				setC(true);
-				setN(false);
-				setH(false);
-				
-				break;
-			}
-			case 0x38:
-			{
-				DEBUG_LOG("JR C, s8");
-				char b2 = memory[PC++];
-				
-				if (CFlag())
 				{
-					
-					PC += b2;
-					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
+					DEBUG_LOG("LD (HL-), A");
+					unsigned int address = H << 8 | L;
+					memory[address--] = A;
+
+					L = address & 0xFF;
+					H = address >> 8;
+
+					break;
 				}
-				break;
-			}
+			case 0x33:
+				{
+					DEBUG_LOG("INC SP");
+					SP++;
+
+					break;
+				}
+			case 0x34:
+				{
+					DEBUG_LOG("INC (HL)");
+
+					unsigned int address = H << 8 | L;
+					memory[address]++;
+
+					setZ(memory[address] == 0);
+					setN(false);
+					break;
+				}
+			case 0x35:
+				{
+					DEBUG_LOG("DEC (HL)");
+
+					unsigned int address = H << 8 | L;
+					memory[address]--;
+
+					setZ(memory[address] == 0);
+					setN(false);
+					break;
+				}
+			case 0x36:
+				{
+					DEBUG_LOG("LD (HL), d8");
+
+					unsigned int address = H << 8 | L;
+					memory[address] = read_memory(PC++);
+
+					break;
+				}
+			case 0x37:
+				{
+					DEBUG_LOG("SCF");
+
+					setC(true);
+					setN(false);
+					setH(false);
+
+					break;
+				}
+			case 0x38:
+				{
+					DEBUG_LOG("JR C, s8");
+					char b2 = read_memory(PC++);
+
+					if (CFlag())
+					{
+
+						PC += b2;
+						DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
+					}
+					break;
+				}
 			case 0x39:
-			{
-				DEBUG_LOG("ADD HL, SP");
-				add16(H, L, SP);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("ADD HL, SP");
+					add16(H, L, SP);
+
+					break;
+				}
 			case 0x3A:
-			{
-				DEBUG_LOG("LOAD A, (HL+)");
-				
-				unsigned int address = H << 8 | L;
-				A = memory[address--];
-				L = address & 0xFF;
-				H = address >> 8;
-				
-				break;
-			}
+				{
+					DEBUG_LOG("LOAD A, (HL+)");
+
+					unsigned int address = H << 8 | L;
+					A = read_memory(address--);
+					L = address & 0xFF;
+					H = address >> 8;
+
+					break;
+				}
 			case 0x3B:
-			{
-				DEBUG_LOG("DEC SP");
-				unsigned char high = SP >> 8;
-				unsigned char low = SP & 0x0F;
-				dec16(high, low);
-				SP = high << 8 | low;
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC SP");
+					unsigned char high = SP >> 8;
+					unsigned char low = SP & 0x0F;
+					dec16(high, low);
+					SP = high << 8 | low;
+
+					break;
+				}
 			case 0x3C:
 				{
 					DEBUG_LOG("INC A");
@@ -992,73 +1048,73 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0x3D:
-			{
-				DEBUG_LOG("DEC A");
-				dec8(A);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("DEC A");
+					dec8(A);
+
+					break;
+				}
 			case 0x3E:
 				{
-					unsigned char b2 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
 					DEBUG_LOG("LOAD A, d8");
 					A = b2;
-					
+
 					break;
 				}
 			case 0x3F:
-			{
-				DEBUG_LOG("CCF");
-				setC(!CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CCF");
+					setC(!CFlag());
+
+					break;
+				}
 			case 0x40:
 				{
 					B = B;
 					DEBUG_LOG("LOAD B, B");
-					
+
 					break;
 				}
 			case 0x41:
 				{
 					B = C;
 					DEBUG_LOG("LOAD B, C");
-					
+
 					break;
 				}
 			case 0x42:
 				{
 					B = D;
 					DEBUG_LOG("LOAD B, D");
-					
+
 					break;
 				}
 			case 0x43:
 				{
 					B = E;
 					DEBUG_LOG("LOAD B, E");
-					
+
 					break;
 				}
 			case 0x44:
 				{
 					B = H;
 					DEBUG_LOG("LOAD B, H");
-					
+
 					break;
 				}
 			case 0x45:
 				{
 					B = L;
 					DEBUG_LOG("LOAD B, L");
-					
+
 					break;
 				}
 			case 0x46:
 				{
 					unsigned int address = H << 8 | L;
-					B = memory[address];
+					B = read_memory(address);
 					DEBUG_LOG("LOAD B, (HL)");
 
 					break;
@@ -1067,657 +1123,649 @@ void TemplateScreen::Update(const double dt)
 				{
 					B = A;
 					DEBUG_LOG("LOAD B, A");
-					
+
 					break;
 				}
 			case 0x48:
 				{
 					C = B;
 					DEBUG_LOG("LOAD C, B");
-					
+
 					break;
 				}
 			case 0x49:
 				{
 					C = C;
 					DEBUG_LOG("LOAD C, C");
-					
+
 					break;
 				}
 			case 0x4A:
 				{
 					C = D;
 					DEBUG_LOG("LOAD C, D");
-					
+
 					break;
 				}
 			case 0x4B:
 				{
 					C = E;
 					DEBUG_LOG("LOAD C, E");
-					
+
 					break;
 				}
 			case 0x4C:
 				{
 					C = H;
 					DEBUG_LOG("LOAD C, H");
-					
+
 					break;
 				}
 			case 0x4D:
 				{
 					C = L;
 					DEBUG_LOG("LOAD C, L");
-					
+
 					break;
 				}
 			case 0x4E:
 				{
 					unsigned int address = H << 8 | L;
-					C = memory[address];
+					C = read_memory(address);
 					DEBUG_LOG("LOAD C, (HL)");
-					
+
 					break;
 				}
 			case 0x4F:
 				{
 					C = A;
 					DEBUG_LOG("LOAD C, A");
-					
+
 					break;
 				}
 			case 0x50:
-			{
-				D = B;
-				DEBUG_LOG("LOAD D, B");
-				
-				break;
-			}
+				{
+					D = B;
+					DEBUG_LOG("LOAD D, B");
+
+					break;
+				}
 			case 0x51:
-			{
-				D = C;
-				DEBUG_LOG("LOAD D, C");
-				
-				break;
-			}
+				{
+					D = C;
+					DEBUG_LOG("LOAD D, C");
+
+					break;
+				}
 			case 0x52:
-			{
-				D = D;
-				DEBUG_LOG("LOAD D, D");
-				
-				break;
-			}
+				{
+					D = D;
+					DEBUG_LOG("LOAD D, D");
+
+					break;
+				}
 			case 0x53:
-			{
-				D = E;
-				DEBUG_LOG("LOAD D, E");
-				
-				break;
-			}
+				{
+					D = E;
+					DEBUG_LOG("LOAD D, E");
+
+					break;
+				}
 			case 0x54:
-			{
-				D = H;
-				DEBUG_LOG("LOAD D, H");
-				
-				break;
-			}
+				{
+					D = H;
+					DEBUG_LOG("LOAD D, H");
+
+					break;
+				}
 			case 0x55:
-			{
-				D = L;
-				DEBUG_LOG("LOAD D, L");
-				
-				break;
-			}
+				{
+					D = L;
+					DEBUG_LOG("LOAD D, L");
+
+					break;
+				}
 			case 0x56:
-			{
-				unsigned int address = H << 8 | L;
-				D = memory[address];
-				DEBUG_LOG("LOAD D, (HL)");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					D = read_memory(address);
+					DEBUG_LOG("LOAD D, (HL)");
+
+					break;
+				}
 			case 0x57:
-			{
-				D = A;
-				DEBUG_LOG("LOAD D, A");
-				
-				break;
-			}
+				{
+					D = A;
+					DEBUG_LOG("LOAD D, A");
+
+					break;
+				}
 			case 0x58:
-			{
-				E = B;
-				DEBUG_LOG("LOAD E, B");
-				
-				break;
-			}
+				{
+					E = B;
+					DEBUG_LOG("LOAD E, B");
+
+					break;
+				}
 			case 0x59:
-			{
-				E = C;
-				DEBUG_LOG("LOAD E, C");
-				
-				break;
-			}
+				{
+					E = C;
+					DEBUG_LOG("LOAD E, C");
+
+					break;
+				}
 			case 0x5A:
-			{
-				E = D;
-				DEBUG_LOG("LOAD E, D");
-				
-				break;
-			}
+				{
+					E = D;
+					DEBUG_LOG("LOAD E, D");
+
+					break;
+				}
 			case 0x5B:
-			{
-				E = E;
-				DEBUG_LOG("LOAD E, E");
-				
-				break;
-			}
+				{
+					E = E;
+					DEBUG_LOG("LOAD E, E");
+
+					break;
+				}
 			case 0x5C:
-			{
-				E = H;
-				DEBUG_LOG("LOAD E, H");
-				
-				break;
-			}
+				{
+					E = H;
+					DEBUG_LOG("LOAD E, H");
+
+					break;
+				}
 			case 0x5D:
-			{
-				E = L;
-				DEBUG_LOG("LOAD E, L");
-				
-				break;
-			}
+				{
+					E = L;
+					DEBUG_LOG("LOAD E, L");
+
+					break;
+				}
 			case 0x5E:
-			{
-				unsigned int address = H << 8 | L;
-				E = memory[address];
-				DEBUG_LOG("LOAD E, (HL)");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					E = read_memory(address);
+					DEBUG_LOG("LOAD E, (HL)");
+
+					break;
+				}
 			case 0x5F:
-			{
-				E = A;
-				DEBUG_LOG("LOAD E, A");
-				
-				break;
-			}
+				{
+					E = A;
+					DEBUG_LOG("LOAD E, A");
+
+					break;
+				}
 			case 0x60:
-			{
-				H = B;
-				DEBUG_LOG("LOAD H, B");
-				
-				break;
-			}
+				{
+					H = B;
+					DEBUG_LOG("LOAD H, B");
+
+					break;
+				}
 			case 0x61:
-			{
-				H = C;
-				DEBUG_LOG("LOAD H, C");
-				
-				break;
-			}
+				{
+					H = C;
+					DEBUG_LOG("LOAD H, C");
+
+					break;
+				}
 			case 0x62:
-			{
-				H = D;
-				DEBUG_LOG("LOAD H, D");
-				
-				break;
-			}
+				{
+					H = D;
+					DEBUG_LOG("LOAD H, D");
+
+					break;
+				}
 			case 0x63:
-			{
-				H = E;
-				DEBUG_LOG("LOAD H, E");
-				
-				break;
-			}
+				{
+					H = E;
+					DEBUG_LOG("LOAD H, E");
+
+					break;
+				}
 			case 0x64:
-			{
-				H = H;
-				DEBUG_LOG("LOAD H, H");
-				
-				break;
-			}
+				{
+					H = H;
+					DEBUG_LOG("LOAD H, H");
+
+					break;
+				}
 			case 0x65:
-			{
-				H = L;
-				DEBUG_LOG("LOAD H, L");
-				
-				break;
-			}
+				{
+					H = L;
+					DEBUG_LOG("LOAD H, L");
+
+					break;
+				}
 			case 0x66:
-			{
-				unsigned int address = H << 8 | L;
-				H = memory[address];
-				DEBUG_LOG("LOAD H, (HL)");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					H = read_memory(address);
+					DEBUG_LOG("LOAD H, (HL)");
+
+					break;
+				}
 			case 0x67:
-			{
-				H = A;
-				DEBUG_LOG("LOAD H, A");
-				
-				break;
-			}
+				{
+					H = A;
+					DEBUG_LOG("LOAD H, A");
+
+					break;
+				}
 			case 0x68:
-			{
-				L = B;
-				DEBUG_LOG("LOAD L, B");
-				
-				break;
-			}
+				{
+					L = B;
+					DEBUG_LOG("LOAD L, B");
+
+					break;
+				}
 			case 0x69:
-			{
-				L = C;
-				DEBUG_LOG("LOAD L, C");
-				
-				break;
-			}
+				{
+					L = C;
+					DEBUG_LOG("LOAD L, C");
+
+					break;
+				}
 			case 0x6A:
-			{
-				L = D;
-				DEBUG_LOG("LOAD L, D");
-				
-				break;
-			}
+				{
+					L = D;
+					DEBUG_LOG("LOAD L, D");
+
+					break;
+				}
 			case 0x6B:
-			{
-				L = E;
-				DEBUG_LOG("LOAD L, E");
-				
-				break;
-			}
+				{
+					L = E;
+					DEBUG_LOG("LOAD L, E");
+
+					break;
+				}
 			case 0x6C:
-			{
-				L = H;
-				DEBUG_LOG("LOAD L, H");
-				
-				break;
-			}
+				{
+					L = H;
+					DEBUG_LOG("LOAD L, H");
+
+					break;
+				}
 			case 0x6D:
-			{
-				L = L;
-				DEBUG_LOG("LOAD L, L");
-				
-				break;
-			}
+				{
+					L = L;
+					DEBUG_LOG("LOAD L, L");
+
+					break;
+				}
 			case 0x6E:
-			{
-				unsigned int address = H << 8 | L;
-				L = memory[address];
-				DEBUG_LOG("LOAD L, (HL)");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					L = read_memory(address);
+					DEBUG_LOG("LOAD L, (HL)");
+
+					break;
+				}
 			case 0x6F:
-			{
-				L = A;
-				DEBUG_LOG("LOAD L, A");
-				
-				break;
-			}
+				{
+					L = A;
+					DEBUG_LOG("LOAD L, A");
+
+					break;
+				}
 			case 0x70:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = B;
-				DEBUG_LOG("LOAD (HL), B");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = B;
+					DEBUG_LOG("LOAD (HL), B");
+
+					break;
+				}
 			case 0x71:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = C;
-				DEBUG_LOG("LOAD (HL), C");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = C;
+					DEBUG_LOG("LOAD (HL), C");
+
+					break;
+				}
 			case 0x72:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = D;
-				DEBUG_LOG("LOAD (HL), D");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = D;
+					DEBUG_LOG("LOAD (HL), D");
+
+					break;
+				}
 			case 0x73:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = E;
-				DEBUG_LOG("LOAD (HL), E");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = E;
+					DEBUG_LOG("LOAD (HL), E");
+
+					break;
+				}
 			case 0x74:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = H;
-				DEBUG_LOG("LOAD (HL), H");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = H;
+					DEBUG_LOG("LOAD (HL), H");
+
+					break;
+				}
 			case 0x75:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = L;
-				DEBUG_LOG("LOAD (HL), L");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = L;
+					DEBUG_LOG("LOAD (HL), L");
+
+					break;
+				}
 			case 0x77:
-			{
-				unsigned int address = H << 8 | L;
-				memory[address] = A;
-				DEBUG_LOG("LOAD (HL), A");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					memory[address] = A;
+					DEBUG_LOG("LOAD (HL), A");
+
+					break;
+				}
 			case 0x78:
-			{
-				A = B;
-				DEBUG_LOG("LOAD A, B");
-				
-				break;
-			}
+				{
+					A = B;
+					DEBUG_LOG("LOAD A, B");
+
+					break;
+				}
 			case 0x79:
-			{
-				A = C;
-				DEBUG_LOG("LOAD A, C");
-				
-				break;
-			}
+				{
+					A = C;
+					DEBUG_LOG("LOAD A, C");
+
+					break;
+				}
 			case 0x7A:
-			{
-				A = D;
-				DEBUG_LOG("LOAD A, D");
-				
-				break;
-			}
+				{
+					A = D;
+					DEBUG_LOG("LOAD A, D");
+
+					break;
+				}
 			case 0x7B:
-			{
-				A = E;
-				DEBUG_LOG("LOAD A, E");
-				
-				break;
-			}
+				{
+					A = E;
+					DEBUG_LOG("LOAD A, E");
+
+					break;
+				}
 			case 0x7C:
-			{
-				A = H;
-				DEBUG_LOG("LOAD A, H");
-				
-				break;
-			}
+				{
+					A = H;
+					DEBUG_LOG("LOAD A, H");
+
+					break;
+				}
 			case 0x7D:
-			{
-				A = L;
-				DEBUG_LOG("LOAD A, L");
-				
-				break;
-			}
+				{
+					A = L;
+					DEBUG_LOG("LOAD A, L");
+
+					break;
+				}
 			case 0x7E:
-			{
-				unsigned int address = H << 8 | L;
-				A = memory[address];
-				DEBUG_LOG("LOAD A, (HL)");
-				
-				break;
-			}
+				{
+					unsigned int address = H << 8 | L;
+					A = read_memory(address);
+					DEBUG_LOG("LOAD A, (HL)");
+
+					break;
+				}
 			case 0x7F:
-			{
-				A = A;
-				DEBUG_LOG("LOAD A, A");
-				
-				break;
-			}
+				{
+					A = A;
+					DEBUG_LOG("LOAD A, A");
+
+					break;
+				}
 			case 0x98:
-			{
-				DEBUG_LOG("SBC A, B");
-				sub8(A, B, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, B");
+					sub8(A, B, CFlag());
+
+					break;
+				}
 			case 0x99:
-			{
-				DEBUG_LOG("SBC A, C");
-				sub8(A, C, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, C");
+					sub8(A, C, CFlag());
+
+					break;
+				}
 			case 0x9A:
-			{
-				DEBUG_LOG("SBC A, D");
-				sub8(A, D, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, D");
+					sub8(A, D, CFlag());
+
+					break;
+				}
 			case 0x9B:
-			{
-				DEBUG_LOG("SBC A, E");
-				sub8(A, E, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, E");
+					sub8(A, E, CFlag());
+
+					break;
+				}
 			case 0x9C:
-			{
-				DEBUG_LOG("SBC A, H");
-				sub8(A, H, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, H");
+					sub8(A, H, CFlag());
+
+					break;
+				}
 			case 0x9D:
-			{
-				DEBUG_LOG("SBC A, L");
-				sub8(A, L, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, L");
+					sub8(A, L, CFlag());
+
+					break;
+				}
 			case 0x9E:
-			{
-				DEBUG_LOG("SBC A, (HL)");
-				unsigned char value = memory[H << 8 | L];
-				sub8(A, value, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, (HL)");
+					unsigned char value = read_memory(H << 8 | L);
+					sub8(A, value, CFlag());
+
+					break;
+				}
 			case 0x9F:
-			{
-				DEBUG_LOG("SBC A, A");
-				sub8(A, A, CFlag());
-				
-				break;
-			}
+				{
+					DEBUG_LOG("SBC A, A");
+					sub8(A, A, CFlag());
+
+					break;
+				}
 			case 0xA8:
-			{
-				DEBUG_LOG("XOR B");
-				xorA(B);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR B");
+					xorA(B);
+
+					break;
+				}
 			case 0xA9:
-			{
-				DEBUG_LOG("XOR C");
-				xorA(C);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR C");
+					xorA(C);
+
+					break;
+				}
 			case 0xAA:
-			{
-				DEBUG_LOG("XOR D");
-				xorA(D);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR D");
+					xorA(D);
+
+					break;
+				}
 			case 0xAB:
-			{
-				DEBUG_LOG("XOR E");
-				xorA(E);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR E");
+					xorA(E);
+
+					break;
+				}
 			case 0xAC:
-			{
-				DEBUG_LOG("XOR H");
-				xorA(H);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR H");
+					xorA(H);
+
+					break;
+				}
 			case 0xAD:
-			{
-				DEBUG_LOG("XOR L");
-				xorA(L);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR L");
+					xorA(L);
+
+					break;
+				}
 			case 0xAE:
-			{
-				DEBUG_LOG("XOR (HL)");
-				unsigned int address = H << 8 | L;
-				xorA(memory[address]);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR (HL)");
+					unsigned int address = H << 8 | L;
+					xorA(memory[address]);
+
+					break;
+				}
 			case 0xAF:
-			{
-				DEBUG_LOG("XOR A");
-				xorA(A);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("XOR A");
+					xorA(A);
+
+					break;
+				}
 			case 0xB0:
-			{
-				DEBUG_LOG("OR A, B");
-				A = A | B;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, B");
+					orA(B);
+					
+					break;
+				}
 			case 0xB1:
-			{
-				DEBUG_LOG("OR A, C");
-				A = A | C;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, C");
+					orA(C);
+					
+					break;
+				}
 			case 0xB2:
-			{
-				DEBUG_LOG("OR A, D");
-				A = A | D;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, D");
+					orA(D);
+					
+					break;
+				}
 			case 0xB3:
-			{
-				DEBUG_LOG("OR A, E");
-				A = A | E;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, E");
+					orA(E);
+					
+					break;
+				}
 			case 0xB4:
-			{
-				DEBUG_LOG("OR A, H");
-				A = A | H;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, H");
+					orA(H);
+					
+					break;
+				}
 			case 0xB5:
-			{
-				DEBUG_LOG("OR A, L");
-				A = A | L;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, L");
+					orA(L);
+					
+					break;
+				}
 			case 0xB6:
-			{
-				DEBUG_LOG("OR A, (HL)");
-				unsigned int address = H << 8 | L;
-				A = A | memory[address];
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, (HL)");
+					unsigned int address = H << 8 | L;
+					orA(read_memory(address));
+					
+					break;
+				}
 			case 0xB7:
-			{
-				DEBUG_LOG("OR A, A");
-				A = A | A;
-				
-				setZ(A == 0);
-				break;
-			}
+				{
+					DEBUG_LOG("OR A, A");
+					orA(A);
+					
+					break;
+				}
 			case 0xB8:
-			{
-				DEBUG_LOG("CP B");
-				compareWithA(B);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP B");
+					compareWithA(B);
+
+					break;
+				}
 			case 0xB9:
-			{
-				DEBUG_LOG("CP C");
-				compareWithA(C);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP C");
+					compareWithA(C);
+
+					break;
+				}
 			case 0xBA:
-			{
-				DEBUG_LOG("CP D");
-				compareWithA(D);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP D");
+					compareWithA(D);
+
+					break;
+				}
 			case 0xBB:
-			{
-				DEBUG_LOG("CP E");
-				compareWithA(E);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP E");
+					compareWithA(E);
+
+					break;
+				}
 			case 0xBC:
-			{
-				DEBUG_LOG("CP H");
-				compareWithA(H);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP H");
+					compareWithA(H);
+
+					break;
+				}
 			case 0xBD:
-			{
-				DEBUG_LOG("CP L");
-				compareWithA(L);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP L");
+					compareWithA(L);
+
+					break;
+				}
 			case 0xBE:
-			{
-				DEBUG_LOG("CP (HL)");
-				unsigned int address = H << 8 | L;
-				unsigned char value = memory[address];
-				compareWithA(value);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP (HL)");
+					unsigned int address = H << 8 | L;
+					unsigned char value = read_memory(address);
+					compareWithA(value);
+
+					break;
+				}
 			case 0xBF:
-			{
-				DEBUG_LOG("CP A");
-				compareWithA(A);
-				
-				break;
-			}
+				{
+					DEBUG_LOG("CP A");
+					compareWithA(A);
+
+					break;
+				}
 			case 0xC0:
-			{
-				if (ZFlag())
 				{
-					DEBUG_LOG("RET NZ - No jump");
+					if (ZFlag())
+					{
+						DEBUG_LOG("RET NZ - No jump");
+					}
+					else
+					{
+						PC = pop16();
+						DEBUG_LOG("RET NZ - " << "0x" << intToHex(PC));
+					}
+					break;
 				}
-				else
-				{
-					PC = pop16();
-					DEBUG_LOG("RET NZ - " << "0x" << intToHex(PC));
-				}
-				break;
-			}
 			case 0xC1:
 				{
 					unsigned int value = pop16();
@@ -1729,8 +1777,8 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xC2:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("JP NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					if (!ZFlag())
 						PC = b3 << 8 | b2;
@@ -1739,8 +1787,8 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xC3:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("JMP a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					PC = b3 << 8 | b2;
 
@@ -1748,8 +1796,8 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xC4:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("CALL NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					if (!ZFlag())
@@ -1761,66 +1809,66 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0xC5:
-			{
-				unsigned int value = B << 8 | C;
-				push16(value);
-				DEBUG_LOG("PUSH BC");
-				
-				break;
-			}
+				{
+					unsigned int value = B << 8 | C;
+					push16(value);
+					DEBUG_LOG("PUSH BC");
+
+					break;
+				}
 			case 0xC6:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("ADD d8 - " << "0x" << charToHex(b2));
-				
-				bool carry = ((signed int)A + (signed int)b2) > 0xFF;
-				signed char half = (0xF & (signed char)A) + (0xF & b2);
-				
-				A = A + b2;
-				
-				setZ(A == 0);
-				setN(false);
-				
-				setH(half > 0xF);
-				setC(carry);
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("ADD d8 - " << "0x" << charToHex(b2));
+
+					bool carry = ((signed int)A + (signed int)b2) > 0xFF;
+					signed char half = (0xF & (signed char)A) + (0xF & b2);
+
+					A = A + b2;
+
+					setZ(A == 0);
+					setN(false);
+
+					setH(half > 0xF);
+					setC(carry);
+
+					break;
+				}
 			case 0xC8:
-			{
-				if (!ZFlag())
 				{
-					DEBUG_LOG("RET Z - No jump");
+					if (!ZFlag())
+					{
+						DEBUG_LOG("RET Z - No jump");
+					}
+					else
+					{
+						PC = pop16();
+						DEBUG_LOG("RET Z - " << "0x" << intToHex(PC));
+					}
+					break;
 				}
-				else
-				{
-					PC = pop16();
-					DEBUG_LOG("RET Z - " << "0x" << intToHex(PC));
-				}
-				break;
-			}
 			case 0xCA:
-			{
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				DEBUG_LOG("JP Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
-				if (ZFlag())
-					PC = b3 << 8 | b2;
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					DEBUG_LOG("JP Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+					if (ZFlag())
+						PC = b3 << 8 | b2;
+
+					break;
+				}
 			case 0xCB:
-			{
-					unsigned char b2 = memory[PC++];
+				{
+					unsigned char b2 = read_memory(PC++);
 					switch (b2)
 					{
 						case 0x00:
-						{
-							DEBUG_LOG("RLC B");
-							RLC(B);
+							{
+								DEBUG_LOG("RLC B");
+								RLC(B);
 
-							break;
-						}
+								break;
+							}
 						case 0x01:
 							{
 								DEBUG_LOG("RLC C");
@@ -1859,9 +1907,9 @@ void TemplateScreen::Update(const double dt)
 						case 0x06:
 							{
 								DEBUG_LOG("RLC (HL)");
-								
+
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								RLC(value);
 								memory[address] = value;
 
@@ -1922,7 +1970,7 @@ void TemplateScreen::Update(const double dt)
 								DEBUG_LOG("RRC (HL)");
 
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								RRC(value);
 								memory[address] = value;
 
@@ -1936,264 +1984,264 @@ void TemplateScreen::Update(const double dt)
 								break;
 							}
 
-						////////////////////////////////////////////
+							////////////////////////////////////////////
 
 						case 0x10:
-						{
-							DEBUG_LOG("RL B");
-							RL(B);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL B");
+								RL(B);
+
+								break;
+							}
 						case 0x11:
-						{
-							DEBUG_LOG("RL C");
-							RL(C);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL C");
+								RL(C);
+
+								break;
+							}
 						case 0x12:
-						{
-							DEBUG_LOG("RL D");
-							RL(D);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL D");
+								RL(D);
+
+								break;
+							}
 						case 0x13:
-						{
-							DEBUG_LOG("RL E");
-							RL(E);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL E");
+								RL(E);
+
+								break;
+							}
 						case 0x14:
-						{
-							DEBUG_LOG("RL H");
-							RL(H);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL H");
+								RL(H);
+
+								break;
+							}
 						case 0x15:
-						{
-							DEBUG_LOG("RL L");
-							RL(L);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL L");
+								RL(L);
+
+								break;
+							}
 						case 0x16:
-						{
-							DEBUG_LOG("RL (HL)");
-							
-							unsigned int address = H << 8 | L;
-							unsigned char value = memory[address];
-							RL(value);
-							memory[address] = value;
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RL (HL)");
+
+								unsigned int address = H << 8 | L;
+								unsigned char value = read_memory(address);
+								RL(value);
+								memory[address] = value;
+
+								break;
+							}
 						case 0x17:
-						{
-							DEBUG_LOG("RL A");
-							RL(A);
-							
-							break;
-						}
-							
+							{
+								DEBUG_LOG("RL A");
+								RL(A);
+
+								break;
+							}
+
 						case 0x18:
-						{
-							DEBUG_LOG("RR B");
-							RR(B);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR B");
+								RR(B);
+
+								break;
+							}
 						case 0x19:
-						{
-							DEBUG_LOG("RR C");
-							RR(C);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR C");
+								RR(C);
+
+								break;
+							}
 						case 0x1A:
-						{
-							DEBUG_LOG("RR D");
-							RR(D);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR D");
+								RR(D);
+
+								break;
+							}
 						case 0x1B:
-						{
-							DEBUG_LOG("RR E");
-							RR(E);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR E");
+								RR(E);
+
+								break;
+							}
 						case 0x1C:
-						{
-							DEBUG_LOG("RR H");
-							RR(H);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR H");
+								RR(H);
+
+								break;
+							}
 						case 0x1D:
-						{
-							DEBUG_LOG("RR L");
-							RR(L);
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR L");
+								RR(L);
+
+								break;
+							}
 						case 0x1E:
-						{
-							DEBUG_LOG("RR (HL)");
-							
-							unsigned int address = H << 8 | L;
-							unsigned char value = memory[address];
-							RR(value);
-							memory[address] = value;
-							
-							break;
-						}
+							{
+								DEBUG_LOG("RR (HL)");
+
+								unsigned int address = H << 8 | L;
+								unsigned char value = read_memory(address);
+								RR(value);
+								memory[address] = value;
+
+								break;
+							}
 						case 0x1F:
-						{
-							DEBUG_LOG("RR A");
-							RR(A);
-							
-							break;
-						}
-							
-							////////////////////////////////////////////
-							
-						case 0x20:
-						{
-							DEBUG_LOG("SLA B");
-							SLA(B);
-							
-							break;
-						}
-						case 0x21:
-						{
-							DEBUG_LOG("SLA C");
-							SLA(C);
-							
-							break;
-						}
-						case 0x22:
-						{
-							DEBUG_LOG("SLA D");
-							SLA(D);
-							
-							break;
-						}
-						case 0x23:
-						{
-							DEBUG_LOG("SLA E");
-							SLA(E);
-							
-							break;
-						}
-						case 0x24:
-						{
-							DEBUG_LOG("SLA H");
-							SLA(H);
-							
-							break;
-						}
-						case 0x25:
-						{
-							DEBUG_LOG("SLA L");
-							SLA(L);
-							
-							break;
-						}
-						case 0x26:
-						{
-							DEBUG_LOG("SLA (HL)");
-							
-							unsigned int address = H << 8 | L;
-							unsigned char value = memory[address];
-							SLA(value);
-							memory[address] = value;
-							
-							break;
-						}
-						case 0x27:
-						{
-							DEBUG_LOG("SLA A");
-							SLA(A);
-							
-							break;
-						}
-							
-						case 0x28:
-						{
-							DEBUG_LOG("SRA B");
-							SRA(B);
-							
-							break;
-						}
-						case 0x29:
-						{
-							DEBUG_LOG("SRA C");
-							SRA(C);
-							
-							break;
-						}
-						case 0x2A:
-						{
-							DEBUG_LOG("SRA D");
-							SRA(D);
-							
-							break;
-						}
-						case 0x2B:
-						{
-							DEBUG_LOG("SRA E");
-							SRA(E);
-							
-							break;
-						}
-						case 0x2C:
-						{
-							DEBUG_LOG("SRA H");
-							SRA(H);
-							
-							break;
-						}
-						case 0x2D:
-						{
-							DEBUG_LOG("SRA L");
-							SRA(L);
-							
-							break;
-						}
-						case 0x2E:
-						{
-							DEBUG_LOG("SRA (HL)");
-							
-							unsigned int address = H << 8 | L;
-							unsigned char value = memory[address];
-							SRA(value);
-							memory[address] = value;
-							
-							break;
-						}
-						case 0x2F:
-						{
-							DEBUG_LOG("SRA A");
-							SRA(A);
-							
-							break;
-						}
-							
+							{
+								DEBUG_LOG("RR A");
+								RR(A);
+
+								break;
+							}
+
 							////////////////////////////////////////////
 
-						////////////////////////////////////////////
+						case 0x20:
+							{
+								DEBUG_LOG("SLA B");
+								SLA(B);
+
+								break;
+							}
+						case 0x21:
+							{
+								DEBUG_LOG("SLA C");
+								SLA(C);
+
+								break;
+							}
+						case 0x22:
+							{
+								DEBUG_LOG("SLA D");
+								SLA(D);
+
+								break;
+							}
+						case 0x23:
+							{
+								DEBUG_LOG("SLA E");
+								SLA(E);
+
+								break;
+							}
+						case 0x24:
+							{
+								DEBUG_LOG("SLA H");
+								SLA(H);
+
+								break;
+							}
+						case 0x25:
+							{
+								DEBUG_LOG("SLA L");
+								SLA(L);
+
+								break;
+							}
+						case 0x26:
+							{
+								DEBUG_LOG("SLA (HL)");
+
+								unsigned int address = H << 8 | L;
+								unsigned char value = read_memory(address);
+								SLA(value);
+								memory[address] = value;
+
+								break;
+							}
+						case 0x27:
+							{
+								DEBUG_LOG("SLA A");
+								SLA(A);
+
+								break;
+							}
+
+						case 0x28:
+							{
+								DEBUG_LOG("SRA B");
+								SRA(B);
+
+								break;
+							}
+						case 0x29:
+							{
+								DEBUG_LOG("SRA C");
+								SRA(C);
+
+								break;
+							}
+						case 0x2A:
+							{
+								DEBUG_LOG("SRA D");
+								SRA(D);
+
+								break;
+							}
+						case 0x2B:
+							{
+								DEBUG_LOG("SRA E");
+								SRA(E);
+
+								break;
+							}
+						case 0x2C:
+							{
+								DEBUG_LOG("SRA H");
+								SRA(H);
+
+								break;
+							}
+						case 0x2D:
+							{
+								DEBUG_LOG("SRA L");
+								SRA(L);
+
+								break;
+							}
+						case 0x2E:
+							{
+								DEBUG_LOG("SRA (HL)");
+
+								unsigned int address = H << 8 | L;
+								unsigned char value = read_memory(address);
+								SRA(value);
+								memory[address] = value;
+
+								break;
+							}
+						case 0x2F:
+							{
+								DEBUG_LOG("SRA A");
+								SRA(A);
+
+								break;
+							}
+
+							////////////////////////////////////////////
+
+							////////////////////////////////////////////
 
 						case 0x80:
-						{
-							DEBUG_LOG("RES 0, B");
-							bitmanip(B, 0, 0);
-							break;
-						}
+							{
+								DEBUG_LOG("RES 0, B");
+								bitmanip(B, 0, 0);
+								break;
+							}
 						case 0x81:
 							{
 								DEBUG_LOG("RES 0, C");
@@ -2228,7 +2276,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 0, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 0, 0);
 								memory[address] = value;
 								break;
@@ -2279,7 +2327,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 1, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 1, 0);
 								memory[address] = value;
 								break;
@@ -2291,7 +2339,7 @@ void TemplateScreen::Update(const double dt)
 								break;
 							}
 
-						///////////////////////
+							///////////////////////
 
 						case 0x90:
 							{
@@ -2333,7 +2381,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 2, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 2, 0);
 								memory[address] = value;
 								break;
@@ -2384,7 +2432,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 3, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 3, 0);
 								memory[address] = value;
 								break;
@@ -2396,7 +2444,7 @@ void TemplateScreen::Update(const double dt)
 								break;
 							}
 
-						///////////////////////
+							///////////////////////
 
 						case 0xA0:
 							{
@@ -2438,7 +2486,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 4, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 4, 0);
 								memory[address] = value;
 								break;
@@ -2489,7 +2537,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 5, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 5, 0);
 								memory[address] = value;
 								break;
@@ -2543,7 +2591,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 6, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 6, 0);
 								memory[address] = value;
 								break;
@@ -2594,7 +2642,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("RES 7, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 7, 0);
 								memory[address] = value;
 								break;
@@ -2606,9 +2654,9 @@ void TemplateScreen::Update(const double dt)
 								break;
 							}
 
-						////////////////////////////////
+							////////////////////////////////
 
-						////////////////////////////////
+							////////////////////////////////
 
 						case 0xC0:
 							{
@@ -2650,7 +2698,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 0, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 0, 1);
 								memory[address] = value;
 								break;
@@ -2701,7 +2749,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 1, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 1, 1);
 								memory[address] = value;
 								break;
@@ -2755,7 +2803,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 2, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 2, 1);
 								memory[address] = value;
 								break;
@@ -2806,7 +2854,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 3, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 3, 1);
 								memory[address] = value;
 								break;
@@ -2860,7 +2908,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 4, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 4, 1);
 								memory[address] = value;
 								break;
@@ -2911,7 +2959,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 5, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 5, 1);
 								memory[address] = value;
 								break;
@@ -2965,7 +3013,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 6, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 6, 1);
 								memory[address] = value;
 								break;
@@ -3016,7 +3064,7 @@ void TemplateScreen::Update(const double dt)
 							{
 								DEBUG_LOG("SET 7, (HL)");
 								unsigned int address = H << 8 | L;
-								unsigned char value = memory[address];
+								unsigned char value = read_memory(address);
 								bitmanip(value, 7, 1);
 								memory[address] = value;
 								break;
@@ -3027,41 +3075,43 @@ void TemplateScreen::Update(const double dt)
 								bitmanip(A, 7, 1);
 								break;
 							}
+						default:
+							abort();
 					}
 					break;
-			}
-			case 0xCC:
-			{
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				DEBUG_LOG("CALL Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
-				
-				if (ZFlag())
-				{
-					push16(PC);
-					PC = b3 << 8 | b2;
 				}
-				
-				break;
-			}
+			case 0xCC:
+				{
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					DEBUG_LOG("CALL Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+
+					if (ZFlag())
+					{
+						push16(PC);
+						PC = b3 << 8 | b2;
+					}
+
+					break;
+				}
 			case 0xCD:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("CALL a16 - " << "0x" << charToHex(b3) << charToHex(b2));
-					
+
 					if ((b3 << 8 | b2) == 0xc79b) // init runtime
 					{
 						int wait = 1;
 					}
-					
+
 					if (PC == 0xc0cd) // print_char
 					{
 						int wait = 1;
 					}
-					
+
 					push16(PC);
-					
+
 					PC = b3 << 8 | b2;
 
 					if (PC == 0xc17e)
@@ -3074,43 +3124,43 @@ void TemplateScreen::Update(const double dt)
 						int wait = 1;
 						DEBUG_LOG("***** CALL init_runtime");
 					}
-					
+
 					if (PC == 0xc36d)
 					{
 						int wait = 1;
 						DEBUG_LOG("***** CALL console_init");
 					}
-					
+
 					if (PC == 0xc410)
 					{
 						int wait = 1;
 						DEBUG_LOG("***** CALL console_hide");
 					}
-					
+
 					if (PC == 0xc35c)
 					{
 						int wait = 1;
 						DEBUG_LOG("***** CALL conosle_wait_vbl");
 					}
-					
+
 					if (PC == 0xc456)
 					{
 						int wait = 1;
 						DEBUG_LOG("***** CALL conosle_scroll_up");
 					}
 
-					//0xc17e - call_init_testing
-					//0xc04d - init_testing_init_crc
-					//0xc79b - init_runtime
-					//0xc36d - console_init
-					//0xc410 - console_hide
-					//0xc35c - conosle_wait_vbl
+					// 0xc17e - call_init_testing
+					// 0xc04d - init_testing_init_crc
+					// 0xc79b - init_runtime
+					// 0xc36d - console_init
+					// 0xc410 - console_hide
+					// 0xc35c - conosle_wait_vbl
 
 					break;
 				}
 			case 0xCE:
 				{
-					unsigned char b2 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
 					DEBUG_LOG("ADC A, d8" << "0x" << charToHex(b2));
 
 					signed char half = (0xF & (signed char)A) + (0xF & b2);
@@ -3124,69 +3174,68 @@ void TemplateScreen::Update(const double dt)
 					setZ(A == 0);
 					setN(false);
 
-
 					break;
 				}
 			case 0xC9:
-			{	
-				auto address = pop16();
-				DEBUG_LOG("RET - " << "0x" << intToHex(address));
-				PC = address;
-				
-				if (PC == 0xc0cd)
 				{
-					int yurt = 1;
+					auto address = pop16();
+					DEBUG_LOG("RET - " << "0x" << intToHex(address));
+					PC = address;
+
+					if (PC == 0xc0cd)
+					{
+						int yurt = 1;
+					}
+
+					if (PC == 0xc414) // console_wait_vbl
+					{
+						int yurt = 1;
+					}
+
+					if (PC == 0xc370) // console_hide
+					{
+						int yurt = 1;
+					}
+
+					if (PC == 0xc39f) // console_scroll_up
+					{
+						int yurt = 1;
+					}
+
+					if (PC == 0xc342) // console_waitvbl
+					{
+						int yurt = 1;
+					}
+
+					break;
 				}
-				
-				if (PC == 0xc414) // console_wait_vbl
-				{
-					int yurt = 1;
-				}
-				
-				if (PC == 0xc370) // console_hide
-				{
-					int yurt = 1;
-				}
-				
-				if (PC == 0xc39f) // console_scroll_up
-				{
-					int yurt = 1;
-				}
-				
-				if (PC == 0xc342) // console_waitvbl
-				{
-					int yurt = 1;
-				}
-				
-				break;
-			}
 			case 0xD0:
-			{
-				if (CFlag())
 				{
-					//PC++;
-					DEBUG_LOG("RET NC - No jump");
+					if (CFlag())
+					{
+						// PC++;
+						DEBUG_LOG("RET NC - No jump");
+					}
+					else
+					{
+						PC = pop16();
+						DEBUG_LOG("RET NC - " << "0x" << intToHex(PC));
+					}
+					break;
 				}
-				else
-				{
-					PC = pop16();
-					DEBUG_LOG("RET NC - " << "0x" << intToHex(PC));
-				}
-				break;
-			}
 			case 0xD1:
-			{
-				unsigned int value = pop16();
-				DEBUG_LOG("POP DE - " << "0x" << intToHex(value));
-				D = value >> 8;
-				E = value & 0xFF;
-				
-				break;
-			}
+				{
+					unsigned int value = pop16();
+					DEBUG_LOG("POP DE - " << "0x" << intToHex(value));
+					D = value >> 8;
+					E = value & 0xFF;
+
+					break;
+				}
 			case 0xD2:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("JP NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 					if (!CFlag())
 						PC = b3 << 8 | b2;
@@ -3195,8 +3244,8 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xD4:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("CALL NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 
 					if (!CFlag())
@@ -3208,75 +3257,75 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0xD5:
-			{
-				unsigned int value = D << 8 | E;
-				push16(value);
-				DEBUG_LOG("PUSH DE");
-				
-				break;
-			}
+				{
+					unsigned int value = D << 8 | E;
+					push16(value);
+					DEBUG_LOG("PUSH DE");
+
+					break;
+				}
 			case 0xD6:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("SUB d8 - " << "0x" << charToHex(b2));
-				
-				bool carry = ((signed char)A - (signed char)b2) > 0;
-				signed char half = (0xF & (signed char)A) - (0xF & b2);
-				
-				A = A - b2;
-				
-				setZ(A == 0);
-				setN(true);
-				
-				setH(half < 0);
-				setC(carry);
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("SUB d8 - " << "0x" << charToHex(b2));
+
+					bool carry = ((signed char)A - (signed char)b2) > 0;
+					signed char half = (0xF & (signed char)A) - (0xF & b2);
+
+					A = A - b2;
+
+					setZ(A == 0);
+					setN(true);
+
+					setH(half < 0);
+					setC(carry);
+
+					break;
+				}
 			case 0xD8:
-			{
-				if (!CFlag())
 				{
-					DEBUG_LOG("RET C - No jump");
+					if (!CFlag())
+					{
+						DEBUG_LOG("RET C - No jump");
+					}
+					else
+					{
+						PC = pop16();
+						DEBUG_LOG("RET C - " << "0x" << intToHex(PC));
+					}
+					break;
 				}
-				else
-				{
-					PC = pop16();
-					DEBUG_LOG("RET C - " << "0x" << intToHex(PC));
-				}
-				break;
-			}
 			case 0xDA:
-			{
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				DEBUG_LOG("JP C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
-				if (CFlag())
-					PC = b3 << 8 | b2;
-				
-				break;
-			}
-			case 0xDC:
-			{
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				DEBUG_LOG("CALL C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
-				
-				if (CFlag())
 				{
-					push16(PC);
-					PC = b3 << 8 | b2;
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					DEBUG_LOG("JP C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+					if (CFlag())
+						PC = b3 << 8 | b2;
+
+					break;
 				}
-				
-				break;
-			}
+			case 0xDC:
+				{
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					DEBUG_LOG("CALL C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
+
+					if (CFlag())
+					{
+						push16(PC);
+						PC = b3 << 8 | b2;
+					}
+
+					break;
+				}
 			case 0xE0:
 				{
-					unsigned char b2 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
 					DEBUG_LOG("LD (a8), A - " << "0xFF" << charToHex(b2));
 					unsigned int address = 0xFF << 8 | b2;
 					memory[address] = A;
-					
+
 					break;
 				}
 			case 0xE1:
@@ -3285,9 +3334,9 @@ void TemplateScreen::Update(const double dt)
 					DEBUG_LOG("POP HL - " << "0x" << intToHex(value));
 					H = value >> 8;
 					L = value & 0xFF;
-					//PC++;
-					
-					//setZ(PC == 0);
+					// PC++;
+
+					// setZ(PC == 0);
 					break;
 				}
 			case 0xE9:
@@ -3300,13 +3349,13 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xEA:
 				{
-					unsigned char b2 = memory[PC++];
-					unsigned char b3 = memory[PC++];
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
 					DEBUG_LOG("LD (a16), A - " << "0x" << charToHex(b3) << charToHex(b2));
 					unsigned int address = b3 << 8 | b2;
 					memory[address] = A;
-					
-					//setZ(PC == 0);
+
+					// setZ(PC == 0);
 					break;
 				}
 			case 0xE5:
@@ -3318,115 +3367,115 @@ void TemplateScreen::Update(const double dt)
 					break;
 				}
 			case 0xE6:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("AND d8 - " << "0x" << charToHex(b2));
-				
-				A = A & b2;
-				
-				setZ(A == 0);
-				setN(false);
-				setH(true);
-				setC(false);
-				
-				break;
-			}
-			case 0xEE:
-			{
-				DEBUG_LOG("XOR d8");
-				xorA(memory[PC++]);
-				
-				break;
-			}
-			case 0xF0:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("LD A, (a8) - " << "0xFF" << charToHex(b2));
-				A = memory[0xFF00 + b2];
-				
-				break;
-			}
-			case 0xF1:
-			{
-				unsigned int value = pop16();
-				DEBUG_LOG("POP AF - " << "0x" << intToHex(value));
-				A = value >> 8;
-				F = value & 0xF0;
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("AND d8 - " << "0x" << charToHex(b2));
 
-				break;
-			}
+					A = A & b2;
+
+					setZ(A == 0);
+					setN(false);
+					setH(true);
+					setC(false);
+
+					break;
+				}
+			case 0xEE:
+				{
+					DEBUG_LOG("XOR d8");
+					xorA(memory[PC++]);
+
+					break;
+				}
+			case 0xF0:
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("LD A, (a8) - " << "0xFF" << charToHex(b2));
+					A = read_memory(0xFF00 + b2);
+
+					break;
+				}
+			case 0xF1:
+				{
+					unsigned int value = pop16();
+					DEBUG_LOG("POP AF - " << "0x" << intToHex(value));
+					A = value >> 8;
+					F = value & 0xF0;
+
+					break;
+				}
 			case 0xF3:
 				{
 					IME = false;
 					DEBUG_LOG("DI - IME DISABLED");
-					
+
 					break;
 				}
 			case 0xF5:
-			{
-				unsigned int value = A << 8 | F;
-				push16(value);
-				DEBUG_LOG("PUSH AF");
-				
-				break;
-			}
+				{
+					unsigned int value = A << 8 | F;
+					push16(value);
+					DEBUG_LOG("PUSH AF");
+
+					break;
+				}
 			case 0xF6:
-			{
-				unsigned char b2 = memory[PC++];
-				DEBUG_LOG("OR d8 - " << "0x" << charToHex(b2));
-				
-				A = A | b2;
-				
-				setZ(A == 0);
-				setN(false);
-				setH(false);
-				setC(false);
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					DEBUG_LOG("OR d8 - " << "0x" << charToHex(b2));
+
+					A = A | b2;
+
+					setZ(A == 0);
+					setN(false);
+					setH(false);
+					setC(false);
+
+					break;
+				}
 			case 0xF9:
-			{
-				DEBUG_LOG("LD SP, HL");
-				
-				SP = H << 8 | L;
-				
-				break;
-			}
+				{
+					DEBUG_LOG("LD SP, HL");
+
+					SP = H << 8 | L;
+
+					break;
+				}
 			case 0xFA:
-			{
-				unsigned char b2 = memory[PC++];
-				unsigned char b3 = memory[PC++];
-				DEBUG_LOG("LOAD A (a16) - " << "0x" << charToHex(b3) << charToHex(b2));
-				
-				unsigned int address = b3 << 8 | b2;
-				A = memory[address];
-				
-				break;
-			}
+				{
+					unsigned char b2 = read_memory(PC++);
+					unsigned char b3 = read_memory(PC++);
+					DEBUG_LOG("LOAD A (a16) - " << "0x" << charToHex(b3) << charToHex(b2));
+
+					unsigned int address = b3 << 8 | b2;
+					A = read_memory(address);
+
+					break;
+				}
 			case 0xFE:
-			{
-				signed char b2 = memory[PC++];
-				signed char result = (signed char)A - b2;
-				DEBUG_LOG("CP d8 - " << charToHex(result));
-				
-				setZ(result == 0);
-				setN(true);
-				setC(result < 0);
-				
-				signed char half = (0xF & (signed char)A) - (0xF & b2);
-				setH(half < 0);
-				
-				break;
-			}
+				{
+					signed char b2 = read_memory(PC++);
+					signed char result = (signed char)A - b2;
+					DEBUG_LOG("CP d8 - " << charToHex(result));
+
+					setZ(result == 0);
+					setN(true);
+					setC(result < 0);
+
+					signed char half = (0xF & (signed char)A) - (0xF & b2);
+					setH(half < 0);
+
+					break;
+				}
 			default:
 				abort();
 		}
-		//m_continue = false;
+		// m_continue = false;
 	}
-	
+
 	if ((unsigned char)memory[SC] == 0x81)
 	{
-		unsigned char value = memory[SB];
+		unsigned char value = read_memory(SB);
 		memory[SC] = 0x00;
 		std::cout << value;
 	}

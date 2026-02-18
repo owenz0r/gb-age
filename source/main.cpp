@@ -7,7 +7,7 @@ int main(int, char**)
 {
 	age::Engine engine;
 	// 700 tick rate/instrutions per second
-	if (engine.Init(SCREEN_WIDTH, SCREEN_HEIGHT, 1.0 / 1000000.0))
+	if (engine.Init(SCREEN_WIDTH, SCREEN_HEIGHT, 1.0 / 10000.0))
 	{
 		auto start_screen = TemplateScreen();
 
