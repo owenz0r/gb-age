@@ -213,8 +213,8 @@ static void add16(unsigned char& h1, unsigned char& l1, unsigned char& h2, unsig
 
 	setN(false);
 	setC(result > 0xFFFF);
-	signed char half = (0xF & (signed char)h1) + (0xF & h2);
-	setH(half > 0xF);
+	unsigned int half = (0xFFF & v1) + (0xFFF & v2);
+	setH(half > 0xFFF);
 
 	h1 = (result & 0xFF00) >> 8;
 	l1 = result & 0xFF;
@@ -304,6 +304,28 @@ static void SRA(unsigned char& reg)
 	setH(false);
 	setN(false);
 }
+
+static void SRL(unsigned char& reg)
+{
+	unsigned int value = reg;
+	value = value >> 1;
+	
+	if (reg & 0x01)
+	{
+		setC(true);
+	}
+	else
+	{
+		setC(false);
+	}
+	
+	reg = value & 0xFF;
+	
+	setZ(reg == 0);
+	setH(false);
+	setN(false);
+}
+
 
 static void RLC(unsigned char& reg)
 {
@@ -406,6 +428,19 @@ static void compareWithA(unsigned char& value)
 	setC(value > A);
 }
 
+static void swap(unsigned char& value)
+{
+	unsigned char tmp = value;
+	value = (value >> 4) & 0x0F;
+	tmp = (tmp << 4) & 0xF0;
+	value = value | tmp;
+	
+	setZ(value == 0);
+	setN(false);
+	setC(false);
+	setH(false);
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -419,11 +454,11 @@ void TemplateScreen::Init()
 #ifdef WIN32
 	std::string path = "Z:/downloads/01-special.gb";
 #else
-	std::string path = "/Users/owenz0r/Downloads/01-special.gb";
-	// std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb";
-	// std::string path = "/Users/owenz0r/Downloads/05-op rp.gb";
+	//std::string path = "/Users/owenz0r/Downloads/01-special.gb"; - passed
+	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
+	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
-	// std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";
+	std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";
 	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
 	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
@@ -814,7 +849,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					DEBUG_LOG("DAA");
 					unsigned char adjust = 0x00;
-					std::cout << "A - " << std::hex << (int)A << std::endl;
+
 					if (NFlag())
 					{
 						if (HFlag())
@@ -834,8 +869,6 @@ void TemplateScreen::Update(const double dt)
 						}
 						A = A + adjust;
 					}
-
-					std::cout << "A - " << std::hex << (int)A << std::endl;
 
 					setZ(A == 0);
 					setH(false);
@@ -976,8 +1009,9 @@ void TemplateScreen::Update(const double dt)
 					unsigned int address = H << 8 | L;
 					memory[address]--;
 
-					setZ(memory[address] == 0);
-					setN(false);
+					setZ(read_memory(address) == 0);
+					setN(true);
+					setH((read_memory(address) & 0x0F) == 0x0F);
 					break;
 				}
 			case 0x36:
@@ -1524,6 +1558,63 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0x90:
+			{
+				DEBUG_LOG("SUB B");
+				sub8(A, B, 0);
+				
+				break;
+			}
+			case 0x91:
+			{
+				DEBUG_LOG("SUB C");
+				sub8(A, C, 0);
+				
+				break;
+			}
+			case 0x92:
+			{
+				DEBUG_LOG("SUB D");
+				sub8(A, D, 0);
+				
+				break;
+			}
+			case 0x93:
+			{
+				DEBUG_LOG("SUB E");
+				sub8(A, E, 0);
+				
+				break;
+			}
+			case 0x94:
+			{
+				DEBUG_LOG("SUB H");
+				sub8(A, H, 0);
+				
+				break;
+			}
+			case 0x95:
+			{
+				DEBUG_LOG("SUB L");
+				sub8(A, L, 0);
+				
+				break;
+			}
+			case 0x96:
+			{
+				DEBUG_LOG("SUB (HL)");
+				unsigned char value = read_memory(H << 8 | L);
+				sub8(A, value, 0);
+				
+				break;
+			}
+			case 0x97:
+			{
+				DEBUG_LOG("SUB A");
+				sub8(A, A, 0);
+				
+				break;
+			}
 			case 0x98:
 				{
 					DEBUG_LOG("SBC A, B");
@@ -2231,6 +2322,125 @@ void TemplateScreen::Update(const double dt)
 
 								break;
 							}
+						case 0x30:
+						{
+							DEBUG_LOG("SWAP B");
+							swap(B);
+							
+							break;
+						}
+						case 0x31:
+						{
+							DEBUG_LOG("SWAP C");
+							swap(C);
+							
+							break;
+						}
+						case 0x32:
+						{
+							DEBUG_LOG("SWAP D");
+							swap(D);
+							
+							break;
+						}
+						case 0x33:
+						{
+							DEBUG_LOG("SWAP E");
+							swap(E);
+							
+							break;
+						}
+						case 0x34:
+						{
+							DEBUG_LOG("SWAP H");
+							swap(H);
+							
+							break;
+						}
+						case 0x35:
+						{
+							DEBUG_LOG("SWAP L");
+							swap(L);
+							
+							break;
+						}
+						case 0x36:
+						{
+							DEBUG_LOG("SWAP (HL)");
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							swap(value);
+							memory[address] = value;
+							
+							break;
+						}
+						case 0x37:
+						{
+							DEBUG_LOG("SWAP A");
+							swap(A);
+							
+							break;
+						}
+						case 0x38:
+						{
+							DEBUG_LOG("SRL B");
+							SRL(B);
+							
+							break;
+						}
+						case 0x39:
+						{
+							DEBUG_LOG("SRL C");
+							SRL(C);
+							
+							break;
+						}
+						case 0x3A:
+						{
+							DEBUG_LOG("SRL D");
+							SRL(D);
+							
+							break;
+						}
+						case 0x3B:
+						{
+							DEBUG_LOG("SRL E");
+							SRL(E);
+							
+							break;
+						}
+						case 0x3C:
+						{
+							DEBUG_LOG("SRL H");
+							SRL(H);
+							
+							break;
+						}
+						case 0x3D:
+						{
+							DEBUG_LOG("SRL L");
+							SRL(L);
+							
+							break;
+						}
+						case 0x3E:
+						{
+							DEBUG_LOG("SRL (HL)");
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							SRL(value);
+							memory[address] = value;
+							
+							break;
+						}
+						case 0x3F:
+						{
+							DEBUG_LOG("SRL A");
+							SRL(A);
+							
+							break;
+						}
 
 							////////////////////////////////////////////
 
@@ -3269,16 +3479,16 @@ void TemplateScreen::Update(const double dt)
 					unsigned char b2 = read_memory(PC++);
 					DEBUG_LOG("SUB d8 - " << "0x" << charToHex(b2));
 
-					bool carry = ((signed char)A - (signed char)b2) > 0;
+					//bool carry = ((signed char)A - (signed char)b2) > 0;
+					setC(b2 > A);
 					signed char half = (0xF & (signed char)A) - (0xF & b2);
 
 					A = A - b2;
 
 					setZ(A == 0);
 					setN(true);
-
 					setH(half < 0);
-					setC(carry);
+					
 
 					break;
 				}
@@ -3319,6 +3529,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xDE:
+			{
+				DEBUG_LOG("SBC A, d8");
+				unsigned char value = read_memory(PC++);
+				sub8(A, value, CFlag());
+				
+				break;
+			}
 			case 0xE0:
 				{
 					unsigned char b2 = read_memory(PC++);
@@ -3454,13 +3672,13 @@ void TemplateScreen::Update(const double dt)
 				}
 			case 0xFE:
 				{
-					signed char b2 = read_memory(PC++);
-					signed char result = (signed char)A - b2;
+					unsigned char b2 = read_memory(PC++);
+					unsigned char result = A - b2;
 					DEBUG_LOG("CP d8 - " << charToHex(result));
 
 					setZ(result == 0);
 					setN(true);
-					setC(result < 0);
+					setC(b2 > A);
 
 					signed char half = (0xF & (signed char)A) - (0xF & b2);
 					setH(half < 0);
