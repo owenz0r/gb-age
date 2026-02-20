@@ -458,8 +458,8 @@ void TemplateScreen::Init()
 	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
-	std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";
-	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
+	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb"; - passed
+	 std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
 	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
@@ -1925,6 +1925,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xC7:
+			{
+				DEBUG_LOG("RST 0");
+				push16(PC);
+				PC = 0x0000;
+				
+				break;
+			}
 			case 0xC8:
 				{
 					if (!ZFlag())
@@ -1938,6 +1946,14 @@ void TemplateScreen::Update(const double dt)
 					}
 					break;
 				}
+			case 0xC9:
+			{
+				auto address = pop16();
+				DEBUG_LOG("RET - " << "0x" << intToHex(address));
+				PC = address;
+				
+				break;
+			}
 			case 0xCA:
 				{
 					unsigned char b2 = read_memory(PC++);
@@ -3386,39 +3402,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
-			case 0xC9:
-				{
-					auto address = pop16();
-					DEBUG_LOG("RET - " << "0x" << intToHex(address));
-					PC = address;
-
-					if (PC == 0xc0cd)
-					{
-						int yurt = 1;
-					}
-
-					if (PC == 0xc414) // console_wait_vbl
-					{
-						int yurt = 1;
-					}
-
-					if (PC == 0xc370) // console_hide
-					{
-						int yurt = 1;
-					}
-
-					if (PC == 0xc39f) // console_scroll_up
-					{
-						int yurt = 1;
-					}
-
-					if (PC == 0xc342) // console_waitvbl
-					{
-						int yurt = 1;
-					}
-
-					break;
-				}
+			case 0xCF:
+			{
+				DEBUG_LOG("RST 1");
+				push16(PC);
+				PC = 0x0008;
+				
+				break;
+			}
 			case 0xD0:
 				{
 					if (CFlag())
@@ -3492,6 +3483,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xD7:
+			{
+				DEBUG_LOG("RST 2");
+				push16(PC);
+				PC = 0x0010;
+				
+				break;
+			}
 			case 0xD8:
 				{
 					if (!CFlag())
@@ -3505,6 +3504,15 @@ void TemplateScreen::Update(const double dt)
 					}
 					break;
 				}
+			case 0xD9:
+			{
+				auto address = pop16();
+				DEBUG_LOG("RETI - " << "0x" << intToHex(address));
+				PC = address;
+				IME = true;
+				
+				break;
+			}
 			case 0xDA:
 				{
 					unsigned char b2 = read_memory(PC++);
@@ -3537,6 +3545,14 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xDF:
+			{
+				DEBUG_LOG("RST 3");
+				push16(PC);
+				PC = 0x0018;
+				
+				break;
+			}
 			case 0xE0:
 				{
 					unsigned char b2 = read_memory(PC++);
@@ -3557,6 +3573,14 @@ void TemplateScreen::Update(const double dt)
 					// setZ(PC == 0);
 					break;
 				}
+			case 0xE7:
+			{
+				DEBUG_LOG("RST 4");
+				push16(PC);
+				PC = 0x0020;
+				
+				break;
+			}
 			case 0xE9:
 				{
 					DEBUG_LOG("JP HL");
@@ -3605,6 +3629,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xEF:
+			{
+				DEBUG_LOG("RST 5");
+				push16(PC);
+				PC = 0x0028;
+				
+				break;
+			}
 			case 0xF0:
 				{
 					unsigned char b2 = read_memory(PC++);
@@ -3651,6 +3683,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xF7:
+			{
+				DEBUG_LOG("RST 6");
+				push16(PC);
+				PC = 0x0030;
+				
+				break;
+			}
 			case 0xF9:
 				{
 					DEBUG_LOG("LD SP, HL");
@@ -3685,6 +3725,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xFF:
+			{
+				DEBUG_LOG("RST 7");
+				push16(PC);
+				PC = 0x0038;
+				
+				break;
+			}
 			default:
 				abort();
 		}
