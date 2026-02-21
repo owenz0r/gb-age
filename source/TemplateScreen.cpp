@@ -191,6 +191,17 @@ static void sub8(unsigned char& r1, unsigned char& r2, int carry = 0)
 	setN(true);
 }
 
+static void add8(unsigned char& r1, unsigned char& r2, int carry = 0)
+{
+	setC(r1 + r2 + carry > 0xFF);
+	setH((r1 & 0x0F) + (r2 & 0x0F) + carry > 0x0F);
+	
+	r1 = r1 + r2 + carry;
+	
+	setZ(r1 == 0);
+	setN(false);
+}
+
 static void add16(unsigned char& h1, unsigned char& l1, unsigned int& v2)
 {
 	unsigned int v1 = h1 << 8 | l1;
@@ -237,6 +248,16 @@ static void orA(unsigned char other)
 	setZ(A == 0);
 	setN(false);
 	setH(false);
+	setC(false);
+}
+
+static void andA(unsigned char other)
+{
+	A = A & other;
+	
+	setZ(A == 0);
+	setN(false);
+	setH(true);
 	setC(false);
 }
 
@@ -459,8 +480,8 @@ void TemplateScreen::Init()
 	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb"; - passed
-	 std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
-	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	 //std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
+	std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -581,6 +602,14 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0x07:
+			{
+				DEBUG_LOG("RLCA");
+				RLC(A);
+				setZ(false);
+				
+				break;
+			}
 			case 0x08:
 				{
 					DEBUG_LOG("LD (a16), SP");
@@ -641,6 +670,9 @@ void TemplateScreen::Update(const double dt)
 				{
 					DEBUG_LOG("RRCA");
 					RRC(A);
+					setZ(false);
+					setN(false);
+					setH(false);
 
 					break;
 				}
@@ -691,6 +723,14 @@ void TemplateScreen::Update(const double dt)
 					DEBUG_LOG("LD D, d8");
 					D = read_memory(PC++);
 
+					break;
+				}
+			case 0x17:
+				{
+					DEBUG_LOG("RL A");
+					RL(A);
+					setZ(false);
+					
 					break;
 				}
 			case 0x18:
@@ -940,6 +980,9 @@ void TemplateScreen::Update(const double dt)
 				{
 					DEBUG_LOG("CPL");
 					A = ~A;
+					
+					setN(true);
+					setH(true);
 
 					break;
 				}
@@ -1100,6 +1143,8 @@ void TemplateScreen::Update(const double dt)
 				{
 					DEBUG_LOG("CCF");
 					setC(!CFlag());
+					setN(false);
+					setH(false);
 
 					break;
 				}
@@ -1558,6 +1603,120 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0x80:
+			{
+				DEBUG_LOG("ADD B");
+				add8(A, B, 0);
+				
+				break;
+			}
+			case 0x81:
+			{
+				DEBUG_LOG("ADD C");
+				add8(A, C, 0);
+				
+				break;
+			}
+			case 0x82:
+			{
+				DEBUG_LOG("ADD D");
+				add8(A, D, 0);
+				
+				break;
+			}
+			case 0x83:
+			{
+				DEBUG_LOG("ADD E");
+				add8(A, E, 0);
+				
+				break;
+			}
+			case 0x84:
+			{
+				DEBUG_LOG("ADD H");
+				add8(A, H, 0);
+				
+				break;
+			}
+			case 0x85:
+			{
+				DEBUG_LOG("ADD L");
+				add8(A, L, 0);
+				
+				break;
+			}
+			case 0x86:
+			{
+				DEBUG_LOG("ADD (HL)");
+				unsigned char value = read_memory(H << 8 | L);
+				add8(A, value, 0);
+				
+				break;
+			}
+			case 0x87:
+			{
+				DEBUG_LOG("ADD A");
+				add8(A, A, 0);
+				
+				break;
+			}
+			case 0x88:
+			{
+				DEBUG_LOG("ADC A, B");
+				add8(A, B, CFlag());
+				
+				break;
+			}
+			case 0x89:
+			{
+				DEBUG_LOG("ADC A, C");
+				add8(A, C, CFlag());
+				
+				break;
+			}
+			case 0x8A:
+			{
+				DEBUG_LOG("ADC A, D");
+				add8(A, D, CFlag());
+				
+				break;
+			}
+			case 0x8B:
+			{
+				DEBUG_LOG("ADC A, E");
+				add8(A, E, CFlag());
+				
+				break;
+			}
+			case 0x8C:
+			{
+				DEBUG_LOG("ADC A, H");
+				add8(A, H, CFlag());
+				
+				break;
+			}
+			case 0x8D:
+			{
+				DEBUG_LOG("ADC A, L");
+				add8(A, L, CFlag());
+				
+				break;
+			}
+			case 0x8E:
+			{
+				DEBUG_LOG("ADC A, (HL)");
+				unsigned char value = read_memory(H << 8 | L);
+				add8(A, value, CFlag());
+				
+				break;
+			}
+			case 0x8F:
+			{
+				DEBUG_LOG("ADC A, A");
+				add8(A, A, CFlag());
+				
+				break;
+			}
 			case 0x90:
 			{
 				DEBUG_LOG("SUB B");
@@ -1672,6 +1831,63 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xA0:
+			{
+				DEBUG_LOG("AND B");
+				andA(B);
+				
+				break;
+			}
+			case 0xA1:
+			{
+				DEBUG_LOG("AND C");
+				andA(C);
+				
+				break;
+			}
+			case 0xA2:
+			{
+				DEBUG_LOG("AND D");
+				andA(D);
+				
+				break;
+			}
+			case 0xA3:
+			{
+				DEBUG_LOG("AND E");
+				andA(E);
+				
+				break;
+			}
+			case 0xA4:
+			{
+				DEBUG_LOG("AND H");
+				andA(H);
+				
+				break;
+			}
+			case 0xA5:
+			{
+				DEBUG_LOG("AND L");
+				andA(L);
+				
+				break;
+			}
+			case 0xA6:
+			{
+				DEBUG_LOG("AND (HL)");
+				unsigned int address = H << 8 | L;
+				andA(memory[address]);
+				
+				break;
+			}
+			case 0xA7:
+			{
+				DEBUG_LOG("AND A");
+				andA(A);
+				
+				break;
+			}
 			case 0xA8:
 				{
 					DEBUG_LOG("XOR B");
