@@ -209,9 +209,13 @@ static void add16(unsigned char& h1, unsigned char& l1, unsigned int& v2)
 
 	setN(false);
 	setC(result > 0xFFFF);
-	signed char half = (0xF & (signed char)h1) + ((0xF00 & v2) >> 8);
-	setH(half > 0xF);
+	//signed char half = (0xF & (signed char)h1) + ((0xF00 & v2) >> 8);
+	//setH(half > 0xF);
+	setH((v1 & 0xFFF) + (v2 & 0xFFF) > 0xFFF);
 
+	if (result > 0xFFFF)
+		result -= 0x10000;
+	
 	h1 = (result & 0xFF00) >> 8;
 	l1 = result & 0xFF;
 }
@@ -476,12 +480,15 @@ void TemplateScreen::Init()
 	std::string path = "Z:/downloads/01-special.gb";
 #else
 	//std::string path = "/Users/owenz0r/Downloads/01-special.gb"; - passed
+	//std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
-	// std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
+	//std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb"; - passed
-	 //std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb";
-	std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	//std::string path = "/Users/owenz0r/Downloads/08-misc instrs.gb";
+	//std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
+	std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb";
+	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -534,9 +541,16 @@ void TemplateScreen::Update(const double dt)
 		static int count = 0;
 		DEBUG_LOG(std::dec << count++ << " PC 0x" << std::hex << PC << " - ");
 		unsigned char b1 = read_memory(PC++);
+		
+		if (SP > 0xFFFFF)
+		{
+			int yurt = 1;
+		}
 
 		// unsigned char n1 = (b1 >> 4) & 0x0F;
 		// unsigned char n2 = b1 & 0x0F;
+		
+		//std::cout << charToHex(b1) << std::endl;
 
 		DEBUG_LOG(std::hex << int(b1));
 
@@ -1111,7 +1125,7 @@ void TemplateScreen::Update(const double dt)
 				{
 					DEBUG_LOG("DEC SP");
 					unsigned char high = SP >> 8;
-					unsigned char low = SP & 0x0F;
+					unsigned char low = SP & 0xFF;
 					dec16(high, low);
 					SP = high << 8 | low;
 
@@ -3797,6 +3811,27 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xE8:
+			{
+				DEBUG_LOG("ADD SP, s8");
+				signed char b2 = read_memory(PC++);
+				
+				int result = SP + b2;
+				setC((SP & 0xFF) + (unsigned char)b2 > 0xFF);
+				setH((SP & 0xF) + ((unsigned char)b2 & 0xF) > 0xF);
+				
+				if (result < 0)
+					result = result & 0xFFFF;
+				if (result > 0xFFFF)
+					result -= 0x10000;
+				
+				SP = result;
+				
+				setZ(false);
+				setN(false);
+				
+				break;
+			}
 			case 0xE9:
 				{
 					DEBUG_LOG("JP HL");
@@ -3907,6 +3942,26 @@ void TemplateScreen::Update(const double dt)
 				
 				break;
 			}
+			case 0xF8:
+			{
+				DEBUG_LOG("LD HL, SP+s8");
+				signed char b2 = read_memory(PC++);
+				unsigned int result = SP + b2;
+				
+				setC((SP & 0xFF) + (unsigned char)b2 > 0xFF);
+				setH((SP & 0xF) + ((unsigned char)b2 & 0xF) > 0xF);
+				
+				if (result > 0xFFFF)
+					result -= 0x10000;
+				
+				H = result >> 8 & 0xFF;
+				L = result & 0xFF;
+				
+				setZ(false);
+				setN(false);
+				
+				break;
+			}
 			case 0xF9:
 				{
 					DEBUG_LOG("LD SP, HL");
@@ -3954,7 +4009,10 @@ void TemplateScreen::Update(const double dt)
 		}
 		// m_continue = false;
 	}
-
+	
+	if (SP > 0xFFFF)
+		SP -= 0x10000;
+	
 	if ((unsigned char)memory[SC] == 0x81)
 	{
 		unsigned char value = read_memory(SB);
