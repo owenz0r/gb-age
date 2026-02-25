@@ -466,6 +466,16 @@ static void swap(unsigned char& value)
 	setH(false);
 }
 
+static void bitCompToZ(unsigned char& value, int bit)
+{
+	unsigned char tmp = value;
+	tmp = (tmp >> bit) & 0x01;
+	setZ(tmp == 0x00); // compliment
+	
+	setN(false);
+	setH(true);
+}
+
 void TemplateScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
@@ -487,7 +497,7 @@ void TemplateScreen::Init()
 	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/08-misc instrs.gb";
 	//std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
-	std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb";
+	//std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
@@ -2689,7 +2699,487 @@ void TemplateScreen::Update(const double dt)
 						}
 
 							////////////////////////////////////////////
+							
+						case 0x40:
+						{
+							DEBUG_LOG("BIT 0, B");
+							bitCompToZ(B, 0);
+							
+							break;
+						}
+						case 0x41:
+						{
+							DEBUG_LOG("BIT 0, C");
+							bitCompToZ(C, 0);
+							
+							break;
+						}
+						case 0x42:
+						{
+							DEBUG_LOG("BIT 0, D");
+							bitCompToZ(D, 0);
+							
+							break;
+						}
+						case 0x43:
+						{
+							DEBUG_LOG("BIT 0, E");
+							bitCompToZ(E, 0);
+							
+							break;
+						}
+						case 0x44:
+						{
+							DEBUG_LOG("BIT 0, H");
+							bitCompToZ(H, 0);
+							
+							break;
+						}
+						case 0x45:
+						{
+							DEBUG_LOG("BIT 0, L");
+							bitCompToZ(L, 0);
+							
+							break;
+						}
+						case 0x46:
+						{
+							DEBUG_LOG("BIT 0, (HL)");
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 0);
+							
+							break;
+						}
+						case 0x47:
+						{
+							DEBUG_LOG("BIT 0, A");
+							bitCompToZ(A, 0);
+							
+							break;
+						}
+						case 0x48:
+						{
+							DEBUG_LOG("BIT 1, B");
+							bitCompToZ(B, 1);
+							
+							break;
+						}
+						case 0x49:
+						{
+							DEBUG_LOG("BIT 1, C");
+							bitCompToZ(C, 1);
+							
+							break;
+						}
+						case 0x4A:
+						{
+							DEBUG_LOG("BIT 1, D");
+							bitCompToZ(D, 1);
+							
+							break;
+						}
+						case 0x4B:
+						{
+							DEBUG_LOG("BIT 1, E");
+							bitCompToZ(E, 1);
+							
+							break;
+						}
+						case 0x4C:
+						{
+							DEBUG_LOG("BIT 1, H");
+							bitCompToZ(H, 1);
+							
+							break;
+						}
+						case 0x4D:
+						{
+							DEBUG_LOG("BIT 1, L");
+							bitCompToZ(L, 1);
+							
+							break;
+						}
+						case 0x4E:
+						{
+							DEBUG_LOG("BIT 1, (HL)");
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 1);
+							
+							break;
+						}
+						case 0x4F:
+						{
+							DEBUG_LOG("BIT 1, A");
+							bitCompToZ(A, 1);
+							
+							break;
+						}
+							
+							////////////////////////////////////////////
 
+						case 0x50:
+						{
+							DEBUG_LOG("BIT 2, B");
+							bitCompToZ(B, 2);
+							
+							break;
+						}
+						case 0x51:
+						{
+							DEBUG_LOG("BIT 2, C");
+							bitCompToZ(C, 2);
+							
+							break;
+						}
+						case 0x52:
+						{
+							DEBUG_LOG("BIT 2, D");
+							bitCompToZ(D, 2);
+							
+							break;
+						}
+						case 0x53:
+						{
+							DEBUG_LOG("BIT 2, E");
+							bitCompToZ(E, 2);
+							
+							break;
+						}
+						case 0x54:
+						{
+							DEBUG_LOG("BIT 2, H");
+							bitCompToZ(H, 2);
+							
+							break;
+						}
+						case 0x55:
+						{
+							DEBUG_LOG("BIT 2, L");
+							bitCompToZ(L, 2);
+							
+							break;
+						}
+						case 0x56:
+						{
+							DEBUG_LOG("BIT 2, (HL)");
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 2);
+							
+							break;
+						}
+						case 0x57:
+						{
+							DEBUG_LOG("BIT 2, A");
+							bitCompToZ(A, 2);
+							
+							break;
+						}
+						case 0x58:
+						{
+							DEBUG_LOG("BIT 3, B");
+							bitCompToZ(B, 3);
+							
+							break;
+						}
+						case 0x59:
+						{
+							DEBUG_LOG("BIT 3, C");
+							bitCompToZ(C, 3);
+							
+							break;
+						}
+						case 0x5A:
+						{
+							DEBUG_LOG("BIT 3, D");
+							bitCompToZ(D, 3);
+							
+							break;
+						}
+						case 0x5B:
+						{
+							DEBUG_LOG("BIT 3, E");
+							bitCompToZ(E, 3);
+							
+							break;
+						}
+						case 0x5C:
+						{
+							DEBUG_LOG("BIT 3, H");
+							bitCompToZ(H, 3);
+							
+							break;
+						}
+						case 0x5D:
+						{
+							DEBUG_LOG("BIT 3, L");
+							bitCompToZ(L, 3);
+							
+							break;
+						}
+						case 0x5E:
+						{
+							DEBUG_LOG("BIT 3, (HL)");
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 3);
+							
+							break;
+						}
+						case 0x5F:
+						{
+							DEBUG_LOG("BIT 3, A");
+							bitCompToZ(A, 3);
+							
+							break;
+						}
+							
+							////////////////////////////////////////////
+							
+						case 0x60:
+						{
+							DEBUG_LOG("BIT 4, B");
+							bitCompToZ(B, 4);
+							
+							break;
+						}
+						case 0x61:
+						{
+							DEBUG_LOG("BIT 4, C");
+							bitCompToZ(C, 4);
+							
+							break;
+						}
+						case 0x62:
+						{
+							DEBUG_LOG("BIT 4, D");
+							bitCompToZ(D, 4);
+							
+							break;
+						}
+						case 0x63:
+						{
+							DEBUG_LOG("BIT 4, E");
+							bitCompToZ(E, 4);
+							
+							break;
+						}
+						case 0x64:
+						{
+							DEBUG_LOG("BIT 4, H");
+							bitCompToZ(H, 4);
+							
+							break;
+						}
+						case 0x65:
+						{
+							DEBUG_LOG("BIT 4, L");
+							bitCompToZ(L, 4);
+							
+							break;
+						}
+						case 0x66:
+						{
+							DEBUG_LOG("BIT 4, (HL)");
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 4);
+							
+							break;
+						}
+						case 0x67:
+						{
+							DEBUG_LOG("BIT 4, A");
+							bitCompToZ(A, 4);
+							
+							break;
+						}
+						case 0x68:
+						{
+							DEBUG_LOG("BIT 5, B");
+							bitCompToZ(B, 5);
+							
+							break;
+						}
+						case 0x69:
+						{
+							DEBUG_LOG("BIT 5, C");
+							bitCompToZ(C, 5);
+							
+							break;
+						}
+						case 0x6A:
+						{
+							DEBUG_LOG("BIT 5, D");
+							bitCompToZ(D, 5);
+							
+							break;
+						}
+						case 0x6B:
+						{
+							DEBUG_LOG("BIT 5, E");
+							bitCompToZ(E, 5);
+							
+							break;
+						}
+						case 0x6C:
+						{
+							DEBUG_LOG("BIT 5, H");
+							bitCompToZ(H, 5);
+							
+							break;
+						}
+						case 0x6D:
+						{
+							DEBUG_LOG("BIT 5, L");
+							bitCompToZ(L, 5);
+							
+							break;
+						}
+						case 0x6E:
+						{
+							DEBUG_LOG("BIT 5, (HL)");
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 5);
+							
+							break;
+						}
+						case 0x6F:
+						{
+							DEBUG_LOG("BIT 5, A");
+							bitCompToZ(A, 5);
+							
+							break;
+						}
+							
+							////////////////////////////////////////////
+							
+						case 0x70:
+						{
+							DEBUG_LOG("BIT 6, B");
+							bitCompToZ(B, 6);
+							
+							break;
+						}
+						case 0x71:
+						{
+							DEBUG_LOG("BIT 6, C");
+							bitCompToZ(C, 6);
+							
+							break;
+						}
+						case 0x72:
+						{
+							DEBUG_LOG("BIT 6, D");
+							bitCompToZ(D, 6);
+							
+							break;
+						}
+						case 0x73:
+						{
+							DEBUG_LOG("BIT 6, E");
+							bitCompToZ(E, 6);
+							
+							break;
+						}
+						case 0x74:
+						{
+							DEBUG_LOG("BIT 6, H");
+							bitCompToZ(H, 6);
+							
+							break;
+						}
+						case 0x75:
+						{
+							DEBUG_LOG("BIT 6, L");
+							bitCompToZ(L, 6);
+							
+							break;
+						}
+						case 0x76:
+						{
+							DEBUG_LOG("BIT 6, (HL)");
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 6);
+							
+							break;
+						}
+						case 0x77:
+						{
+							DEBUG_LOG("BIT 6, A");
+							bitCompToZ(A, 6);
+							
+							break;
+						}
+						case 0x78:
+						{
+							DEBUG_LOG("BIT 7, B");
+							bitCompToZ(B, 7);
+							
+							break;
+						}
+						case 0x79:
+						{
+							DEBUG_LOG("BIT 7, C");
+							bitCompToZ(C, 7);
+							
+							break;
+						}
+						case 0x7A:
+						{
+							DEBUG_LOG("BIT 7, D");
+							bitCompToZ(D, 7);
+							
+							break;
+						}
+						case 0x7B:
+						{
+							DEBUG_LOG("BIT 7, E");
+							bitCompToZ(E, 7);
+							
+							break;
+						}
+						case 0x7C:
+						{
+							DEBUG_LOG("BIT 7, H");
+							bitCompToZ(H, 7);
+							
+							break;
+						}
+						case 0x7D:
+						{
+							DEBUG_LOG("BIT 7, L");
+							bitCompToZ(L, 7);
+							
+							break;
+						}
+						case 0x7E:
+						{
+							DEBUG_LOG("BIT 7, (HL)");
+							
+							unsigned int address = H << 8 | L;
+							unsigned char value = read_memory(address);
+							bitCompToZ(value, 7);
+							
+							break;
+						}
+						case 0x7F:
+						{
+							DEBUG_LOG("BIT 7, A");
+							bitCompToZ(A, 7);
+							
+							break;
+						}
+							
+							////////////////////////////////////////////
+							
 							////////////////////////////////////////////
 
 						case 0x80:
