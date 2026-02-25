@@ -495,7 +495,7 @@ void TemplateScreen::Init()
 	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb"; - passed
-	//std::string path = "/Users/owenz0r/Downloads/08-misc instrs.gb";
+	//std::string path = "/Users/owenz0r/Downloads/08-misc instrs.gb"; -- passed
 	//std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
@@ -4293,6 +4293,13 @@ void TemplateScreen::Update(const double dt)
 					// setZ(PC == 0);
 					break;
 				}
+			case 0xE2:
+			{
+				DEBUG_LOG("LD (C), A");
+				memory[0xFF00 + C] = A;
+				
+				break;
+			}
 			case 0xE7:
 			{
 				DEBUG_LOG("RST 4");
@@ -4395,6 +4402,13 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xF2:
+			{
+				DEBUG_LOG("LD A, (C)");
+				A = read_memory(0xFF00 + C);
+				
+				break;
+			}
 			case 0xF3:
 				{
 					IME = false;
