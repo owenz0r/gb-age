@@ -490,6 +490,7 @@ void TemplateScreen::Init()
 	std::string path = "Z:/downloads/01-special.gb";
 #else
 	//std::string path = "/Users/owenz0r/Downloads/01-special.gb"; - passed
+	std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb";
 	//std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
@@ -498,6 +499,7 @@ void TemplateScreen::Init()
 	//std::string path = "/Users/owenz0r/Downloads/08-misc instrs.gb"; -- passed
 	//std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
+	//std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
 	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
@@ -1063,7 +1065,11 @@ void TemplateScreen::Update(const double dt)
 					DEBUG_LOG("INC (HL)");
 
 					unsigned int address = H << 8 | L;
-					memory[address]++;
+					unsigned char value = read_memory(address);
+					
+					setH((value & 0x0F) + 1 > 0x0F);
+					value++;
+					memory[address] = value;
 
 					setZ(memory[address] == 0);
 					setN(false);
@@ -4485,6 +4491,13 @@ void TemplateScreen::Update(const double dt)
 
 					break;
 				}
+			case 0xFB:
+			{
+				DEBUG_LOG("EI - IME ENABLED");
+				IME = true;
+				
+				break;
+			}
 			case 0xFE:
 				{
 					unsigned char b2 = read_memory(PC++);
