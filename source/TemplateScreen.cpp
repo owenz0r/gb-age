@@ -44,14 +44,16 @@ static unsigned char L;
 
 constexpr unsigned int SB = 0xFF01;
 constexpr unsigned int SC = 0xFF02;
+constexpr unsigned int IE = 0xFFFF;
+constexpr unsigned int IF = 0xFF0F;
 
 static std::string console = "";
 static std::ofstream logfile;
 
 static unsigned char read_memory(const unsigned int address)
 {
-	if (address == 0xFF44)
-		return 0x90;
+	//if (address == 0xFF44)
+	//	return 0x90;
 	return memory[address];
 }
 
@@ -550,14 +552,52 @@ void TemplateScreen::Update(const double dt)
 	{
 		print_status();
 		
+		if (IME && read_memory(IF) > 0)
+		{
+			auto flag = read_memory(IF);
+			auto enable = read_memory(IE);
+			
+			if (flag & 0x01 && enable & 0x01) // VBlank
+			{
+				IME = false;
+				memory[IF] = memory[IF] & 0xFE;
+				push16(PC);
+				PC = 0x0040;
+			}
+			else if (flag & 0x02 & enable & 0x02) // STAT
+			{
+				IME = false;
+				memory[IF] = memory[IF] & 0xFD;
+				push16(PC);
+				PC = 0x0048;
+			}
+			else if (flag & 0x04 & enable & 0x04) // Timer
+			{
+				IME = false;
+				memory[IF] = memory[IF] & 0xFB;
+				push16(PC);
+				PC = 0x0050;
+			}
+			else if (flag & 0x08 & enable & 0x08) // Serial
+			{
+				IME = false;
+				memory[IF] = memory[IF] & 0xF7;
+				push16(PC);
+				PC = 0x0058;
+			}
+			else if (flag & 0x10 & enable & 0x10) // Joypad
+			{
+				IME = false;
+				memory[IF] = memory[IF] & 0xEF;
+				push16(PC);
+				PC = 0x0060;
+			}
+		}
+		
 		static int count = 0;
 		DEBUG_LOG(std::dec << count++ << " PC 0x" << std::hex << PC << " - ");
 		unsigned char b1 = read_memory(PC++);
 		
-		if (SP > 0xFFFFF)
-		{
-			int yurt = 1;
-		}
 
 		// unsigned char n1 = (b1 >> 4) & 0x0F;
 		// unsigned char n2 = b1 & 0x0F;
