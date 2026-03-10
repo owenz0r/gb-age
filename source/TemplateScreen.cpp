@@ -57,6 +57,156 @@ static unsigned char read_memory(const unsigned int address)
 	return memory[address];
 }
 
+struct OpcodeData
+{
+	int reads = 0;
+	int writes = 0;
+	int alu = 0;
+	void set(int r, int w, int a)
+	{
+		reads = r;
+		writes = w;
+		alu = a;
+	}
+};
+
+Opcode opData[0xFF];
+
+static void initOpcodeData()
+{
+	opData[0x20].set(1, 1, 0);
+	opData[0x30].set(1, 1, 0);
+	
+	opData[0x01].set(2, 0, 0);
+	opData[0x11].set(2, 0, 0);
+	opData[0x21].set(2, 0, 0);
+	opData[0x31].set(2, 0, 0);
+	
+	opData[0x02].set(0, 1, 0);
+	opData[0x12].set(0, 1, 0);
+	opData[0x22].set(0, 1, 0);
+	opData[0x32].set(0, 1, 0);
+	
+	opData[0x34].set(0, 1, 1);
+	
+	opData[0x44].set(0, 1, 1);
+	
+	opData[0x06].set(1, 0, 0);
+	opData[0x16].set(1, 0, 0);
+	opData[0x26].set(1, 0, 0);
+	opData[0x36].set(1, 1, 0);
+	
+	opData[0x08].set(2, 2, 1);
+	opData[0x18].set(1, 0, 1);
+	opData[0x28].set(1, 0, 1);
+	opData[0x38].set(1, 0, 1);
+	
+	opData[0x09].set(0, 0, 2);
+	opData[0x19].set(0, 0, 2);
+	opData[0x29].set(0, 0, 2);
+	opData[0x39].set(0, 0, 2);
+	
+	opData[0x0A].set(1, 0, 1);
+	opData[0x1A].set(1, 0, 1);
+	opData[0x2A].set(1, 0, 1);
+	opData[0x3A].set(1, 0, 1);
+	
+	opData[0x0B].set(0, 0, 2);
+	opData[0x1B].set(0, 0, 2);
+	opData[0x2B].set(0, 0, 2);
+	opData[0x3B].set(0, 0, 2);
+	
+	opData[0x0E].set(2, 0, 0);
+	opData[0x1E].set(2, 0, 0);
+	opData[0x2E].set(2, 0, 0);
+	opData[0x3E].set(2, 0, 0);
+}
+
+struct CPUData
+{
+	enum class Param
+	{
+		OPCODE,
+		FIRST,
+		SECOND
+	};
+	Param m_param = Param::OPCODE;
+	
+	enum class Timing
+	{
+		READY,
+		WAIT,
+		EXECUTE
+	};
+	Timing m_timing = Timing::READY;
+	
+	enum class Mode
+	{
+		FETCH,
+		DECODE,
+		EXECUTE
+	};
+	Mode m_state = Mode::DECODE;
+	int m_waitTicks = 0;
+	
+	unsigned char m_opcode = 0x00;
+	
+	void tick()
+	{
+		switch (m_state)
+		{
+			case Mode::FETCH	: fetch(); break;
+			case Mode::DECODE	: decode(); break;
+			case Mode::EXECUTE	: execute(); break;
+		}
+	}
+	
+	void fetch()
+	{
+		switch (m_timing)
+		{
+			case Timing::READY:
+			{
+				m_timing = Timing::WAIT;
+				m_waitTicks = 2; // read + wait + execute = 4
+				break;
+			}
+			case Timing::WAIT:
+			{
+				m_waitTicks--;
+				if (m_waitTicks == 0)
+					m_timing = Timing::EXECUTE;
+				break;
+			}
+			case Timing::EXECUTE:
+			{
+				switch (m_param)
+				{
+					case Param::OPCODE:
+					{
+						m_opcode = read_memory(PC++);
+						decode();
+						break;
+					}
+				}
+				m_timing = Timing::READY;
+			}
+		}
+	}
+	
+	void decode()
+	{
+		
+	}
+	
+	void execute()
+	{
+		
+	}
+};
+
+CPUData CPU;
+
 static void print_status()
 {
 	logfile << std::hex << std::setfill('0') << std::uppercase;
@@ -551,6 +701,12 @@ void TemplateScreen::Update(const double dt)
 	if (m_continue)
 	{
 		print_status();
+		
+		static int tick = 1;
+		CPU.tick();
+		std::cout << tick++ << " " << charToHex(CPU.m_opcode) << std::endl;
+		
+		return;
 		
 		if (IME && read_memory(IF) > 0)
 		{
