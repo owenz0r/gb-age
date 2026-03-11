@@ -57,69 +57,357 @@ static unsigned char read_memory(const unsigned int address)
 	return memory[address];
 }
 
-struct OpcodeData
+struct OpcodeTimingData
 {
-	int reads = 0;
-	int writes = 0;
-	int alu = 0;
-	void set(int r, int w, int a)
+	int min = 4;
+	int max = 4;
+	void set(int _max, int _min)
 	{
-		reads = r;
-		writes = w;
-		alu = a;
+		min = _min;
+		max = _max;
 	}
 };
 
-Opcode opData[0xFF];
+OpcodeTimingData opTimeData[0xFF];
 
-static void initOpcodeData()
+static void initOpcodeTimingData()
 {
-	opData[0x20].set(1, 1, 0);
-	opData[0x30].set(1, 1, 0);
+	// x0
+	opTimeData[0x00].set(4, 4);
+	opTimeData[0x10].set(4, 4);
+	opTimeData[0x20].set(12, 8);
+	opTimeData[0x30].set(12, 8);
 	
-	opData[0x01].set(2, 0, 0);
-	opData[0x11].set(2, 0, 0);
-	opData[0x21].set(2, 0, 0);
-	opData[0x31].set(2, 0, 0);
+	opTimeData[0x40].set(4, 4);
+	opTimeData[0x50].set(4, 4);
+	opTimeData[0x60].set(4, 4);
+	opTimeData[0x70].set(8, 8);
 	
-	opData[0x02].set(0, 1, 0);
-	opData[0x12].set(0, 1, 0);
-	opData[0x22].set(0, 1, 0);
-	opData[0x32].set(0, 1, 0);
+	opTimeData[0x80].set(4, 4);
+	opTimeData[0x90].set(4, 4);
+	opTimeData[0xA0].set(4, 4);
+	opTimeData[0xB0].set(4, 4);
 	
-	opData[0x34].set(0, 1, 1);
+	opTimeData[0xC0].set(20, 8);
+	opTimeData[0xD0].set(20, 8);
+	opTimeData[0xE0].set(12, 12);
+	opTimeData[0xF0].set(12, 12);
 	
-	opData[0x44].set(0, 1, 1);
+	// x1
+	opTimeData[0x01].set(12, 12);
+	opTimeData[0x11].set(12, 12);
+	opTimeData[0x21].set(12, 12);
+	opTimeData[0x31].set(12, 12);
 	
-	opData[0x06].set(1, 0, 0);
-	opData[0x16].set(1, 0, 0);
-	opData[0x26].set(1, 0, 0);
-	opData[0x36].set(1, 1, 0);
+	opTimeData[0x41].set(4, 4);
+	opTimeData[0x51].set(4, 4);
+	opTimeData[0x61].set(4, 4);
+	opTimeData[0x71].set(8, 8);
 	
-	opData[0x08].set(2, 2, 1);
-	opData[0x18].set(1, 0, 1);
-	opData[0x28].set(1, 0, 1);
-	opData[0x38].set(1, 0, 1);
+	opTimeData[0x81].set(4, 4);
+	opTimeData[0x91].set(4, 4);
+	opTimeData[0xA1].set(4, 4);
+	opTimeData[0xB1].set(4, 4);
 	
-	opData[0x09].set(0, 0, 2);
-	opData[0x19].set(0, 0, 2);
-	opData[0x29].set(0, 0, 2);
-	opData[0x39].set(0, 0, 2);
+	opTimeData[0xC1].set(12, 12);
+	opTimeData[0xD1].set(12, 12);
+	opTimeData[0xE1].set(12, 12);
+	opTimeData[0xF1].set(12, 12);
 	
-	opData[0x0A].set(1, 0, 1);
-	opData[0x1A].set(1, 0, 1);
-	opData[0x2A].set(1, 0, 1);
-	opData[0x3A].set(1, 0, 1);
+	// x2
+	opTimeData[0x02].set(8, 8);
+	opTimeData[0x12].set(8, 8);
+	opTimeData[0x22].set(8, 8);
+	opTimeData[0x32].set(8, 8);
 	
-	opData[0x0B].set(0, 0, 2);
-	opData[0x1B].set(0, 0, 2);
-	opData[0x2B].set(0, 0, 2);
-	opData[0x3B].set(0, 0, 2);
+	opTimeData[0x42].set(4, 4);
+	opTimeData[0x52].set(4, 4);
+	opTimeData[0x62].set(4, 4);
+	opTimeData[0x72].set(8, 8);
 	
-	opData[0x0E].set(2, 0, 0);
-	opData[0x1E].set(2, 0, 0);
-	opData[0x2E].set(2, 0, 0);
-	opData[0x3E].set(2, 0, 0);
+	opTimeData[0x82].set(4, 4);
+	opTimeData[0x92].set(4, 4);
+	opTimeData[0xA2].set(4, 4);
+	opTimeData[0xB2].set(4, 4);
+	
+	opTimeData[0xC2].set(16, 12);
+	opTimeData[0xD2].set(16, 12);
+	opTimeData[0xE2].set(8, 8);
+	opTimeData[0xF2].set(8, 8);
+	
+	// x3
+	opTimeData[0x03].set(8, 8);
+	opTimeData[0x13].set(8, 8);
+	opTimeData[0x23].set(8, 8);
+	opTimeData[0x33].set(8, 8);
+	
+	opTimeData[0x43].set(4, 4);
+	opTimeData[0x53].set(4, 4);
+	opTimeData[0x63].set(4, 4);
+	opTimeData[0x73].set(8, 8);
+	
+	opTimeData[0x83].set(4, 4);
+	opTimeData[0x93].set(4, 4);
+	opTimeData[0xA3].set(4, 4);
+	opTimeData[0xB3].set(4, 4);
+	
+	opTimeData[0xC3].set(16, 16);
+	opTimeData[0xD3].set(4, 4);
+	opTimeData[0xE3].set(4, 4);
+	opTimeData[0xF3].set(4, 4);
+	
+	// x4
+	opTimeData[0x04].set(4, 4);
+	opTimeData[0x14].set(4, 4);
+	opTimeData[0x24].set(4, 4);
+	opTimeData[0x34].set(12, 12);
+	
+	opTimeData[0x44].set(4, 4);
+	opTimeData[0x54].set(4, 4);
+	opTimeData[0x64].set(4, 4);
+	opTimeData[0x74].set(8, 8);
+	
+	opTimeData[0x84].set(4, 4);
+	opTimeData[0x94].set(4, 4);
+	opTimeData[0xA4].set(4, 4);
+	opTimeData[0xB4].set(4, 4);
+	
+	opTimeData[0xC4].set(24, 12);
+	opTimeData[0xD4].set(24, 12);
+	opTimeData[0xE4].set(4, 4);
+	opTimeData[0xF4].set(4, 4);
+	
+	// x5
+	opTimeData[0x05].set(4, 4);
+	opTimeData[0x15].set(4, 4);
+	opTimeData[0x25].set(4, 4);
+	opTimeData[0x35].set(12, 12);
+	
+	opTimeData[0x45].set(4, 4);
+	opTimeData[0x55].set(4, 4);
+	opTimeData[0x65].set(4, 4);
+	opTimeData[0x75].set(8, 8);
+	
+	opTimeData[0x85].set(4, 4);
+	opTimeData[0x95].set(4, 4);
+	opTimeData[0xA5].set(4, 4);
+	opTimeData[0xB5].set(4, 4);
+	
+	opTimeData[0xC5].set(16, 16);
+	opTimeData[0xD5].set(16, 16);
+	opTimeData[0xE5].set(16, 16);
+	opTimeData[0xF5].set(16, 16);
+	
+	// x6
+	opTimeData[0x06].set(8, 8);
+	opTimeData[0x16].set(8, 8);
+	opTimeData[0x26].set(8, 8);
+	opTimeData[0x36].set(12, 12);
+	
+	opTimeData[0x46].set(8, 8);
+	opTimeData[0x56].set(8, 8);
+	opTimeData[0x66].set(8, 8);
+	opTimeData[0x76].set(4, 4);
+	
+	opTimeData[0x86].set(8, 8);
+	opTimeData[0x96].set(8, 8);
+	opTimeData[0xA6].set(8, 8);
+	opTimeData[0xB6].set(8, 8);
+	
+	opTimeData[0xC6].set(8, 8);
+	opTimeData[0xD6].set(8, 8);
+	opTimeData[0xE6].set(8, 8);
+	opTimeData[0xF6].set(8, 8);
+	
+	// x7
+	opTimeData[0x07].set(4, 4);
+	opTimeData[0x17].set(4, 4);
+	opTimeData[0x27].set(4, 4);
+	opTimeData[0x37].set(4, 4);
+	
+	opTimeData[0x47].set(4, 4);
+	opTimeData[0x57].set(4, 4);
+	opTimeData[0x67].set(4, 4);
+	opTimeData[0x77].set(8, 8);
+	
+	opTimeData[0x87].set(4, 4);
+	opTimeData[0x97].set(4, 4);
+	opTimeData[0xA7].set(4, 4);
+	opTimeData[0xB7].set(4, 4);
+	
+	opTimeData[0xC7].set(16, 16);
+	opTimeData[0xD7].set(16, 16);
+	opTimeData[0xE7].set(16, 16);
+	opTimeData[0xF7].set(16, 16);
+	
+	// x8
+	opTimeData[0x08].set(20, 20);
+	opTimeData[0x18].set(12, 12);
+	opTimeData[0x28].set(12, 8);
+	opTimeData[0x38].set(12, 8);
+	
+	opTimeData[0x48].set(4, 4);
+	opTimeData[0x58].set(4, 4);
+	opTimeData[0x68].set(4, 4);
+	opTimeData[0x78].set(4, 4);
+	
+	opTimeData[0x88].set(4, 4);
+	opTimeData[0x98].set(4, 4);
+	opTimeData[0xA8].set(4, 4);
+	opTimeData[0xB8].set(4, 4);
+	
+	opTimeData[0xC8].set(20, 8);
+	opTimeData[0xD8].set(20, 8);
+	opTimeData[0xE8].set(16, 16);
+	opTimeData[0xF8].set(12, 12);
+	
+	// x9
+	opTimeData[0x09].set(8, 8);
+	opTimeData[0x19].set(8, 8);
+	opTimeData[0x29].set(8, 8);
+	opTimeData[0x39].set(8, 8);
+	
+	opTimeData[0x49].set(4, 4);
+	opTimeData[0x59].set(4, 4);
+	opTimeData[0x69].set(4, 4);
+	opTimeData[0x79].set(4, 4);
+	
+	opTimeData[0x89].set(4, 4);
+	opTimeData[0x99].set(4, 4);
+	opTimeData[0xA9].set(4, 4);
+	opTimeData[0xB9].set(4, 4);
+	
+	opTimeData[0xC9].set(16, 16);
+	opTimeData[0xD9].set(16, 16);
+	opTimeData[0xE9].set(4, 4);
+	opTimeData[0xF9].set(8, 8);
+	
+	// xA
+	opTimeData[0x0A].set(8, 8);
+	opTimeData[0x1A].set(8, 8);
+	opTimeData[0x2A].set(8, 8);
+	opTimeData[0x3A].set(8, 8);
+	
+	opTimeData[0x4A].set(4, 4);
+	opTimeData[0x5A].set(4, 4);
+	opTimeData[0x6A].set(4, 4);
+	opTimeData[0x7A].set(4, 4);
+	
+	opTimeData[0x8A].set(4, 4);
+	opTimeData[0x9A].set(4, 4);
+	opTimeData[0xAA].set(4, 4);
+	opTimeData[0xBA].set(4, 4);
+	
+	opTimeData[0xCA].set(16, 12);
+	opTimeData[0xDA].set(16, 12);
+	opTimeData[0xEA].set(16, 16);
+	opTimeData[0xFA].set(16, 16);
+	
+	// xB
+	opTimeData[0x0B].set(8, 8);
+	opTimeData[0x1B].set(8, 8);
+	opTimeData[0x2B].set(8, 8);
+	opTimeData[0x3B].set(8, 8);
+	
+	opTimeData[0x4B].set(4, 4);
+	opTimeData[0x5B].set(4, 4);
+	opTimeData[0x6B].set(4, 4);
+	opTimeData[0x7B].set(4, 4);
+	
+	opTimeData[0x8B].set(4, 4);
+	opTimeData[0x9B].set(4, 4);
+	opTimeData[0xAB].set(4, 4);
+	opTimeData[0xBB].set(4, 4);
+	
+	opTimeData[0xCB].set(4, 4);
+	opTimeData[0xDB].set(4, 4);
+	opTimeData[0xEB].set(4, 4);
+	opTimeData[0xFB].set(4, 4);
+	
+	// xC
+	opTimeData[0x0C].set(4, 4);
+	opTimeData[0x1C].set(4, 4);
+	opTimeData[0x2C].set(4, 4);
+	opTimeData[0x3C].set(4, 4);
+	
+	opTimeData[0x4C].set(4, 4);
+	opTimeData[0x5C].set(4, 4);
+	opTimeData[0x6C].set(4, 4);
+	opTimeData[0x7C].set(4, 4);
+	
+	opTimeData[0x8C].set(4, 4);
+	opTimeData[0x9C].set(4, 4);
+	opTimeData[0xAC].set(4, 4);
+	opTimeData[0xBC].set(4, 4);
+	
+	opTimeData[0xCC].set(24, 12);
+	opTimeData[0xDC].set(24, 12);
+	opTimeData[0xEC].set(4, 4);
+	opTimeData[0xFC].set(4, 4);
+	
+	// xD
+	opTimeData[0x0D].set(4, 4);
+	opTimeData[0x1D].set(4, 4);
+	opTimeData[0x2D].set(4, 4);
+	opTimeData[0x3D].set(4, 4);
+	
+	opTimeData[0x4D].set(4, 4);
+	opTimeData[0x5D].set(4, 4);
+	opTimeData[0x6D].set(4, 4);
+	opTimeData[0x7D].set(4, 4);
+	
+	opTimeData[0x8D].set(4, 4);
+	opTimeData[0x9D].set(4, 4);
+	opTimeData[0xAD].set(4, 4);
+	opTimeData[0xBD].set(4, 4);
+	
+	opTimeData[0xCD].set(24, 24);
+	opTimeData[0xDD].set(4, 4);
+	opTimeData[0xED].set(4, 4);
+	opTimeData[0xFD].set(4, 4);
+	
+	// xE
+	opTimeData[0x0E].set(8, 8);
+	opTimeData[0x1E].set(8, 8);
+	opTimeData[0x2E].set(8, 8);
+	opTimeData[0x3E].set(8, 8);
+	
+	opTimeData[0x4E].set(8, 8);
+	opTimeData[0x5E].set(8, 8);
+	opTimeData[0x6E].set(8, 8);
+	opTimeData[0x7E].set(8, 8);
+	
+	opTimeData[0x8E].set(8, 8);
+	opTimeData[0x9E].set(8, 8);
+	opTimeData[0xAE].set(8, 8);
+	opTimeData[0xBE].set(8, 8);
+	
+	opTimeData[0xCE].set(8, 8);
+	opTimeData[0xDE].set(8, 8);
+	opTimeData[0xEE].set(8, 8);
+	opTimeData[0xFE].set(8, 8);
+	
+	// xF
+	opTimeData[0x0F].set(4, 4);
+	opTimeData[0x1F].set(4, 4);
+	opTimeData[0x2F].set(4, 4);
+	opTimeData[0x3F].set(4, 4);
+	
+	opTimeData[0x4F].set(4, 4);
+	opTimeData[0x5F].set(4, 4);
+	opTimeData[0x6F].set(4, 4);
+	opTimeData[0x7F].set(4, 4);
+	
+	opTimeData[0x8F].set(4, 4);
+	opTimeData[0x9F].set(4, 4);
+	opTimeData[0xAF].set(4, 4);
+	opTimeData[0xBF].set(4, 4);
+	
+	opTimeData[0xCF].set(16, 16);
+	opTimeData[0xDF].set(16, 16);
+	opTimeData[0xEF].set(16, 16);
+	opTimeData[0xFF].set(16, 16);
+	
 }
 
 struct CPUData
