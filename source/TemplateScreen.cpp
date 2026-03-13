@@ -52,8 +52,8 @@ static std::ofstream logfile;
 
 static unsigned char read_memory(const unsigned int address)
 {
-	//if (address == 0xFF44)
-	//	return 0x90;
+	if (address == 0xFF44)
+		return 0x90;
 	return memory[address];
 }
 
@@ -410,10 +410,17 @@ static void initOpcodeTimingData()
 	
 }
 
+static bool conditionHit = false;
 static void executeOpcode(unsigned char opcode);
+static void print_status();
 
 struct CPUData
 {
+	CPUData()
+	{
+		initOpcodeTimingData();
+	}
+	
 	enum class Param
 	{
 		OPCODE,
@@ -430,6 +437,7 @@ struct CPUData
 	};
 	Mode m_state = Mode::FETCH;
 	int m_waitTicks = 0;
+	bool hasExecuted = false;
 	
 	unsigned char m_opcode = 0x00;
 	
@@ -445,6 +453,9 @@ struct CPUData
 	
 	void fetch()
 	{
+		print_status();
+		
+		hasExecuted = false;
 		m_opcode = read_memory(PC++);
 		m_waitTicks = opTimeData[m_opcode].min - 2; // read + wait + execute = 4
 		m_state = Mode::WAIT;
@@ -454,17 +465,94 @@ struct CPUData
 	{
 		m_waitTicks--;
 		if (m_waitTicks == 0)
-			m_state = Mode::EXECUTE;
+		{
+			if (hasExecuted)
+				m_state = Mode::FETCH;
+			else
+				m_state = Mode::EXECUTE;
+		}
 	}
 	
 	void execute()
 	{
+		conditionHit = false;
 		executeOpcode(m_opcode);
-		m_state = Mode::FETCH;
+		hasExecuted = true;
+		
+		if (conditionHit)
+		{
+			m_waitTicks = opTimeData[m_opcode].max - opTimeData[m_opcode].min; // read + wait + execute = 4
+			m_state = Mode::WAIT;
+		}
+		else
+		{
+			m_state = Mode::FETCH;
+		}
 	}
 };
-
 CPUData CPU;
+
+struct TimerData
+{
+	constexpr static unsigned int TIMA 	= 0xFF05;
+	constexpr static unsigned int TMA 	= 0xFF06;
+	constexpr static unsigned int TAC 	= 0xFF07;
+	
+	int ticks = 0;
+	void tick()
+	{
+		unsigned char tac = read_memory(TAC);
+		unsigned char enable = tac & 0x04;
+		if (enable)
+		{
+			int mcount = 0;
+			unsigned char select = tac & 0x03;
+			switch (select)
+			{
+				case 0x00:
+				{
+					mcount = 256;
+					break;
+				}
+				case 0x01:
+				{
+					mcount = 4;
+					break;
+				}
+				case 0x02:
+				{
+					mcount = 16;
+					break;
+				}
+				case 0x03:
+				{
+					mcount = 64;
+					break;
+				}
+				default:
+				{
+					abort();
+				}
+			}
+			
+			if (ticks / 4 == mcount)
+			{
+				if ((unsigned char)memory[TIMA] == 0xFF)
+				{
+					memory[IF] = memory[IF] | 0x04;
+					memory[TIMA] = memory[TMA];
+					ticks = 0;
+				}
+				else
+				{
+					memory[TIMA]++;
+				}
+			}
+			ticks++;
+		}
+	}
+};
+TimerData Timer;
 
 static void print_status()
 {
@@ -901,8 +989,8 @@ void TemplateScreen::Init()
 	std::string path = "Z:/downloads/01-special.gb";
 #else
 	//std::string path = "/Users/owenz0r/Downloads/01-special.gb"; // - passed
-	//std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb";
-	std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; // - passed
+	std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb";
+	//std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; // - passed
 	//std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
 	//std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
@@ -959,16 +1047,15 @@ void TemplateScreen::Update(const double dt)
 {
 	if (m_continue)
 	{
-		print_status();
-		
-		static int tick = 1;
 		CPU.tick();
-		//std::cout << tick++ << " " << charToHex(CPU.m_opcode) << std::endl;
+		Timer.tick();
 	}
 }
 
 static void executeOpcode(unsigned char opcode)
 {
+	int waits = 0;
+	
 	if (IME && read_memory(IF) > 0)
 	{
 		auto flag = read_memory(IF);
@@ -1303,7 +1390,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (!ZFlag())
 				{
-
+					conditionHit = true;
 					PC += b2;
 					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 				}
@@ -1405,7 +1492,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (ZFlag())
 				{
-
+					conditionHit = true;
 					PC += b2;
 					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 				}
@@ -1476,7 +1563,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (!CFlag())
 				{
-
+					conditionHit = true;
 					PC += b2;
 					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 				}
@@ -1570,7 +1657,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (CFlag())
 				{
-
+					conditionHit = true;
 					PC += b2;
 					DEBUG_LOG("Jumping to - " << intToHex(PC) << " (" << charToHex(b2) << ")");
 				}
@@ -2555,6 +2642,7 @@ static void executeOpcode(unsigned char opcode)
 				}
 				else
 				{
+					conditionHit = true;
 					PC = pop16();
 					DEBUG_LOG("RET NZ - " << "0x" << intToHex(PC));
 				}
@@ -2575,7 +2663,10 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b3 = read_memory(PC++);
 				DEBUG_LOG("JP NZ, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 				if (!ZFlag())
+				{
+					conditionHit = true;
 					PC = b3 << 8 | b2;
+				}
 
 				break;
 			}
@@ -2596,6 +2687,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (!ZFlag())
 				{
+					conditionHit = true;
 					push16(PC);
 					PC = b3 << 8 | b2;
 				}
@@ -2644,6 +2736,7 @@ static void executeOpcode(unsigned char opcode)
 				}
 				else
 				{
+					conditionHit = true;
 					PC = pop16();
 					DEBUG_LOG("RET Z - " << "0x" << intToHex(PC));
 				}
@@ -2663,7 +2756,10 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b3 = read_memory(PC++);
 				DEBUG_LOG("JP Z, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 				if (ZFlag())
+				{
+					conditionHit = true;
 					PC = b3 << 8 | b2;
+				}
 
 				break;
 			}
@@ -4497,6 +4593,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (ZFlag())
 				{
+					conditionHit = true;
 					push16(PC);
 					PC = b3 << 8 | b2;
 				}
@@ -4602,6 +4699,7 @@ static void executeOpcode(unsigned char opcode)
 				}
 				else
 				{
+					conditionHit = true;
 					PC = pop16();
 					DEBUG_LOG("RET NC - " << "0x" << intToHex(PC));
 				}
@@ -4622,7 +4720,10 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b3 = read_memory(PC++);
 				DEBUG_LOG("JP NC, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 				if (!CFlag())
+				{
+					conditionHit = true;
 					PC = b3 << 8 | b2;
+				}
 
 				break;
 			}
@@ -4634,6 +4735,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (!CFlag())
 				{
+					conditionHit = true;
 					push16(PC);
 					PC = b3 << 8 | b2;
 				}
@@ -4682,6 +4784,7 @@ static void executeOpcode(unsigned char opcode)
 				}
 				else
 				{
+					conditionHit = true;
 					PC = pop16();
 					DEBUG_LOG("RET C - " << "0x" << intToHex(PC));
 				}
@@ -4702,7 +4805,10 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b3 = read_memory(PC++);
 				DEBUG_LOG("JP C, a16 - " << "0x" << charToHex(b3) << charToHex(b2));
 				if (CFlag())
+				{
+					conditionHit = true;
 					PC = b3 << 8 | b2;
+				}
 
 				break;
 			}
@@ -4714,6 +4820,7 @@ static void executeOpcode(unsigned char opcode)
 
 				if (CFlag())
 				{
+					conditionHit = true;
 					push16(PC);
 					PC = b3 << 8 | b2;
 				}
@@ -4992,6 +5099,8 @@ static void executeOpcode(unsigned char opcode)
 		memory[SC] = 0x00;
 		std::cout << value;
 	}
+	
+	return waits;
 }
 
 void TemplateScreen::Draw()
