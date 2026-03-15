@@ -412,6 +412,7 @@ static void initOpcodeTimingData()
 
 static bool conditionHit = false;
 static void executeOpcode(unsigned char opcode);
+static void handleInterrupts();
 static void print_status();
 
 struct CPUData
@@ -438,6 +439,7 @@ struct CPUData
 	Mode m_state = Mode::FETCH;
 	int m_waitTicks = 0;
 	bool hasExecuted = false;
+	bool halt = false;
 	
 	unsigned char m_opcode = 0x00;
 	
@@ -455,10 +457,15 @@ struct CPUData
 	{
 		print_status();
 		
-		hasExecuted = false;
-		m_opcode = read_memory(PC++);
-		m_waitTicks = opTimeData[m_opcode].min - 2; // read + wait + execute = 4
-		m_state = Mode::WAIT;
+		handleInterrupts();
+		
+		if (!halt)
+		{
+			hasExecuted = false;
+			m_opcode = read_memory(PC++);
+			m_waitTicks = opTimeData[m_opcode].min - 2; // read + wait + execute = 4
+			m_state = Mode::WAIT;
+		}
 	}
 	
 	void wait()
@@ -545,10 +552,17 @@ struct TimerData
 				}
 				else
 				{
-					memory[TIMA]++;
+					unsigned char tma = memory[TMA];
+					unsigned char value = memory[TIMA];
+					value++;
+					memory[TIMA] = value;
 				}
+				ticks = 1;
 			}
-			ticks++;
+			else
+			{
+				ticks++;
+			}
 		}
 	}
 };
@@ -1052,44 +1066,59 @@ void TemplateScreen::Update(const double dt)
 	}
 }
 
-static void executeOpcode(unsigned char opcode)
+static void handleInterrupts()
 {
-	int waits = 0;
+	auto flag = read_memory(IF);
+	auto enable = read_memory(IE);
 	
-	if (IME && read_memory(IF) > 0)
+	if (flag & 0x01 && enable & 0x01) // VBlank
 	{
-		auto flag = read_memory(IF);
-		auto enable = read_memory(IE);
-		
-		if (flag & 0x01 && enable & 0x01) // VBlank
+		CPU.halt = false;
+		if (IME)
 		{
 			IME = false;
 			memory[IF] = memory[IF] & 0xFE;
 			push16(PC);
 			PC = 0x0040;
 		}
-		else if (flag & 0x02 & enable & 0x02) // STAT
+	}
+	else if (flag & 0x02 & enable & 0x02) // STAT
+	{
+		CPU.halt = false;
+		if (IME)
 		{
 			IME = false;
 			memory[IF] = memory[IF] & 0xFD;
 			push16(PC);
 			PC = 0x0048;
 		}
-		else if (flag & 0x04 & enable & 0x04) // Timer
+	}
+	else if (flag & 0x04 & enable & 0x04) // Timer
+	{
+		CPU.halt = false;
+		if (IME)
 		{
 			IME = false;
 			memory[IF] = memory[IF] & 0xFB;
 			push16(PC);
 			PC = 0x0050;
 		}
-		else if (flag & 0x08 & enable & 0x08) // Serial
+	}
+	else if (flag & 0x08 & enable & 0x08) // Serial
+	{
+		CPU.halt = false;
+		if (IME)
 		{
 			IME = false;
 			memory[IF] = memory[IF] & 0xF7;
 			push16(PC);
 			PC = 0x0058;
 		}
-		else if (flag & 0x10 & enable & 0x10) // Joypad
+	}
+	else if (flag & 0x10 & enable & 0x10) // Joypad
+	{
+		CPU.halt = false;
+		if (IME)
 		{
 			IME = false;
 			memory[IF] = memory[IF] & 0xEF;
@@ -1097,6 +1126,53 @@ static void executeOpcode(unsigned char opcode)
 			PC = 0x0060;
 		}
 	}
+}
+
+static void executeOpcode(unsigned char opcode)
+{
+	int waits = 0;
+	
+//	if (IME && read_memory(IF) > 0)
+//	{
+//		auto flag = read_memory(IF);
+//		auto enable = read_memory(IE);
+//		
+//		if (flag & 0x01 && enable & 0x01) // VBlank
+//		{
+//			IME = false;
+//			memory[IF] = memory[IF] & 0xFE;
+//			push16(PC);
+//			PC = 0x0040;
+//		}
+//		else if (flag & 0x02 & enable & 0x02) // STAT
+//		{
+//			IME = false;
+//			memory[IF] = memory[IF] & 0xFD;
+//			push16(PC);
+//			PC = 0x0048;
+//		}
+//		else if (flag & 0x04 & enable & 0x04) // Timer
+//		{
+//			IME = false;
+//			memory[IF] = memory[IF] & 0xFB;
+//			push16(PC);
+//			PC = 0x0050;
+//		}
+//		else if (flag & 0x08 & enable & 0x08) // Serial
+//		{
+//			IME = false;
+//			memory[IF] = memory[IF] & 0xF7;
+//			push16(PC);
+//			PC = 0x0058;
+//		}
+//		else if (flag & 0x10 & enable & 0x10) // Joypad
+//		{
+//			IME = false;
+//			memory[IF] = memory[IF] & 0xEF;
+//			push16(PC);
+//			PC = 0x0060;
+//		}
+//	}
 	
 	static int count = 0;
 	DEBUG_LOG(std::dec << count++ << " PC 0x" << std::hex << PC << " - ");
@@ -2110,6 +2186,11 @@ static void executeOpcode(unsigned char opcode)
 				memory[address] = L;
 				DEBUG_LOG("LOAD (HL), L");
 
+				break;
+			}
+		case 0x76:
+			{
+				CPU.halt = true;
 				break;
 			}
 		case 0x77:
