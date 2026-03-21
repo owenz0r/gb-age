@@ -1,4 +1,4 @@
-#include "TemplateScreen.h"
+#include "GameboyScreen.h"
 #include "SDL/SDLInput.h"
 #include "core/Engine.h"
 #include "core/Renderer.h"
@@ -520,6 +520,67 @@ struct CPUData
 };
 CPUData CPU;
 
+struct GPUData
+{
+	enum class Mode
+	{
+		OAM_SEARCH,
+		PIXEL_TRANSFER,
+		HBLANK,
+		VBLANK
+	};
+	Mode m_state = Mode::OAM_SEARCH;
+	
+	int ticks = 0;
+	
+	void tick()
+	{
+		switch (m_state)
+		{
+			case Mode::OAM_SEARCH:
+				oam_search();
+				break;
+			case Mode::PIXEL_TRANSFER:
+				pixel_transfer();
+				break;
+			case Mode::HBLANK:
+				hblank();
+				break;
+			case Mode::VBLANK:
+				vblank();
+				break;
+			default:
+				abort();
+		}
+	}
+	
+	void oam_search()
+	{
+		ticks++;
+		if (ticks == 80)
+		{
+			ticks = 0;
+			m_state = Mode::PIXEL_TRANSFER;
+		}
+	}
+	
+	void pixel_transfer()
+	{
+		m_state = Mode::HBLANK;
+	}
+	
+	void hblank()
+	{
+		m_state = Mode::VBLANK;
+	}
+	void vblank()
+	{
+		m_state = Mode::OAM_SEARCH;
+	}
+	
+};
+GPUData GPU;
+
 struct TimerData
 {
 	int ticks = 0;
@@ -1006,7 +1067,7 @@ static void bitCompToZ(unsigned char& value, int bit)
 	setH(true);
 }
 
-void TemplateScreen::Init()
+void GameboyScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
 	m_input->SetQuitCallback([this]() { m_engine->Quit(); });
@@ -1020,7 +1081,7 @@ void TemplateScreen::Init()
 	std::string path = "Z:/downloads/01-special.gb";
 #else
 	// std::string path = "/Users/owenz0r/Downloads/01-special.gb"; // - passed
-	//std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb"; // - passed
+	std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb"; // - passed
 	// std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; // - passed
 	// std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
@@ -1030,7 +1091,7 @@ void TemplateScreen::Init()
 	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
-	std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -1074,11 +1135,12 @@ void TemplateScreen::Init()
 	}
 }
 
-void TemplateScreen::Update(const double dt)
+void GameboyScreen::Update(const double dt)
 {
 	if (m_continue)
 	{
 		CPU.tick();
+		GPU.tick();
 		Timer.tick();
 	}
 }
@@ -5197,7 +5259,7 @@ static void executeOpcode(unsigned char opcode)
 	}
 }
 
-void TemplateScreen::Draw()
+static void DrawRegisters(age::Renderer* renderer)
 {
 	age::TextParams params;
 	params.text = "Registers";
@@ -5205,70 +5267,95 @@ void TemplateScreen::Draw()
 	params.height = 1.0f;
 	params.color = age::Color::White();
 	params.temp = false;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = "AF";
 	params.pos.y++;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = charToHex(A) + " " + charToHex(F);
 	params.pos.x = 10;
 	params.temp = true;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = "BC";
 	params.pos.x = 6;
 	params.pos.y++;
 	params.temp = false;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = charToHex(B) + " " + charToHex(C);
 	params.pos.x = 10;
 	params.temp = true;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = "DE";
 	params.pos.x = 6;
 	params.pos.y++;
 	params.temp = false;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = charToHex(D) + " " + charToHex(E);
 	params.pos.x = 10;
 	params.temp = true;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = "HL";
 	params.pos.x = 6;
 	params.pos.y++;
 	params.temp = false;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = charToHex(H) + " " + charToHex(L);
 	params.pos.x = 6;
 	params.pos.x = 10;
 	params.temp = true;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = "SP";
 	params.pos.x = 6;
 	params.pos.y += 2;
 	params.temp = false;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = intToHex(SP);
 	params.pos.x = 10;
 	params.temp = true;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = "PC";
 	params.pos.x = 6;
 	params.pos.y++;
 	params.temp = false;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
 
 	params.text = intToHex(PC);
 	params.pos.x = 10;
 	params.temp = true;
-	m_renderer->DrawText(params);
+	renderer->DrawText(params);
+}
+
+static void checkerboard(age::Renderer* renderer)
+{
+	for (int i=0; i < 144; ++i)
+	{
+		for (int j=0; j < 160; j++)
+		{
+			auto color = age::Color::Black();
+			if (i % 2 == 0)
+			{
+				color = j % 2 == 0 ? age::Color::White() : age::Color::Black();
+			}
+			else
+			{
+				color = j % 2 == 0 ? age::Color::Black() : age::Color::White();
+			}
+			renderer->DrawQuad(age::Rect(j,i, 1, 1), color);
+		}
+	}
+}
+
+void GameboyScreen::Draw()
+{
+	//checkerboard(m_renderer);
 }
