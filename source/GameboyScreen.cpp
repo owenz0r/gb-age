@@ -10,7 +10,7 @@
 #include <iostream>
 #include <sstream>
 
-// #define DEBUG_PRINT
+//#define DEBUG_PRINT
 
 #ifdef DEBUG_PRINT
 #define DEBUG_LOG(x) std::cout << x << '\n'
@@ -51,13 +51,21 @@ constexpr unsigned int TIMA = 0xFF05;
 constexpr unsigned int TMA = 0xFF06;
 constexpr unsigned int TAC = 0xFF07;
 
+constexpr unsigned int LY = 0xFF44;
+constexpr unsigned int LCDC = 0xFF40;
+
 static std::string console = "";
 static std::ofstream logfile;
 
 static unsigned char read_memory(const unsigned int address)
 {
-	if (address == 0xFF44)
-		return 0x90;
+	if (address == LCDC)
+	{
+		int yurt = 1;
+	}
+	
+	//if (address == 0xFF44)
+	//	return 0x90;
 	if (address == 0xFF4D)
 		return 0xFF;
 	return memory[address];
@@ -66,7 +74,7 @@ static unsigned char read_memory(const unsigned int address)
 static void write_memory(const unsigned int address, unsigned char value)
 {
 	// if (address == TMA || address == TAC || address == IF || address == IE)
-	if (address == IE)
+	if (address == LCDC)
 	{
 		int yurt = 1;
 	}
@@ -522,6 +530,13 @@ CPUData CPU;
 
 struct GPUData
 {
+	unsigned int TILEMAP0 = 0x9800;
+	unsigned int TILEMAP1 = 0x9C00;
+	
+	unsigned int TILEBLOCK0 = 0x8000;
+	unsigned int TILEBLOCK1 = 0x8800;
+	unsigned int TILEBLOCK2 = 0x9000;
+	
 	enum class Mode
 	{
 		OAM_SEARCH,
@@ -532,6 +547,11 @@ struct GPUData
 	Mode m_state = Mode::OAM_SEARCH;
 	
 	int ticks = 0;
+	
+	GPUData()
+	{
+		write_memory(LY, 0);
+	}
 	
 	void tick()
 	{
@@ -566,16 +586,73 @@ struct GPUData
 	
 	void pixel_transfer()
 	{
+		for (int x=0; x < 20; ++x)
+		{
+			unsigned int address = TILEMAP0 + (read_memory(LY) * 32) + x;
+			unsigned char idx = read_memory(address);
+			
+			if (idx != 0x00)
+			{
+				int yurt = 1;
+			}
+			
+			int accum = 0;
+			unsigned char tiledata[16];
+			for (int i=0; i < 16; ++i)
+			{
+				tiledata[i] = read_memory(TILEBLOCK0 + (idx << 8) + i);
+				accum += tiledata[i];
+			}
+			
+			if (accum > 0)
+			{
+				int yurt = 1;
+			}
+			
+			auto line = read_memory(LY) % 8; // tile height
+			unsigned char first = tiledata[line * 2];
+			unsigned char second = tiledata[(line * 2) + 1];
+			
+			unsigned char combined[8];
+			unsigned char bit = 0x01;
+			for(int i=0; i < 8; ++i)
+			{
+				combined[i] = ((second & 0x01) << 1);
+				combined[i] = combined[i] | (first & 0x01);
+			
+				first = first >> 1;
+				second = second >> 1;
+				
+				display[read_memory(LY)][(x * 8) + i] = combined[i];
+			}
+			
+			
+		}
 		m_state = Mode::HBLANK;
 	}
 	
 	void hblank()
 	{
-		m_state = Mode::VBLANK;
+		unsigned char value = read_memory(LY);
+		value++;
+		write_memory(LY, value);
+		
+		if (value < 144)
+			m_state = Mode::OAM_SEARCH;
+		else
+			m_state = Mode::VBLANK;
 	}
 	void vblank()
 	{
-		m_state = Mode::OAM_SEARCH;
+		unsigned char value = read_memory(LY);
+		value++;
+		write_memory(LY, value);
+		
+		if (value >= 154)
+		{
+			write_memory(LY, 0); // should this pause for 1 more tick before setting to zero?
+			m_state = Mode::OAM_SEARCH;
+		}
 	}
 	
 };
@@ -1081,7 +1158,7 @@ void GameboyScreen::Init()
 	std::string path = "Z:/downloads/01-special.gb";
 #else
 	// std::string path = "/Users/owenz0r/Downloads/01-special.gb"; // - passed
-	std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb"; // - passed
+	//std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb"; // - passed
 	// std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; // - passed
 	// std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
@@ -1091,7 +1168,8 @@ void GameboyScreen::Init()
 	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
-	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -1126,6 +1204,7 @@ void GameboyScreen::Init()
 	L = 0x4D;
 	SP = 0xFFFE;
 	PC = 0x0100;
+	//PC = 0x0000;
 
 	logfile.open("log.txt");
 	if (!logfile.is_open())
@@ -1211,56 +1290,8 @@ static void executeOpcode(unsigned char opcode)
 {
 	int waits = 0;
 
-	//	if (IME && read_memory(IF) > 0)
-	//	{
-	//		auto flag = read_memory(IF);
-	//		auto enable = read_memory(IE);
-	//
-	//		if (flag & 0x01 && enable & 0x01) // VBlank
-	//		{
-	//			IME = false;
-	//			write_memory(IF, read_memory(IF) & 0xFE);
-	//			push16(PC);
-	//			PC = 0x0040;
-	//		}
-	//		else if (flag & 0x02 & enable & 0x02) // STAT
-	//		{
-	//			IME = false;
-	//			write_memory(IF, read_memory(IF) & 0xFD);
-	//			push16(PC);
-	//			PC = 0x0048;
-	//		}
-	//		else if (flag & 0x04 & enable & 0x04) // Timer
-	//		{
-	//			IME = false;
-	//			write_memory(IF, read_memory(IF) & 0xFB);
-	//			push16(PC);
-	//			PC = 0x0050;
-	//		}
-	//		else if (flag & 0x08 & enable & 0x08) // Serial
-	//		{
-	//			IME = false;
-	//			write_memory(IF, read_memory(IF) & 0xF7);
-	//			push16(PC);
-	//			PC = 0x0058;
-	//		}
-	//		else if (flag & 0x10 & enable & 0x10) // Joypad
-	//		{
-	//			IME = false;
-	//			write_memory(IF, read_memory(IF) & 0xEF);
-	//			push16(PC);
-	//			PC = 0x0060;
-	//		}
-	//	}
-
 	static int count = 0;
 	DEBUG_LOG(std::dec << count++ << " PC 0x" << std::hex << PC << " - ");
-	// unsigned char b1 = read_memory(PC++);
-
-	// unsigned char n1 = (b1 >> 4) & 0x0F;
-	// unsigned char n2 = b1 & 0x0F;
-
-	// std::cout << charToHex(b1) << std::endl;
 
 	DEBUG_LOG(std::hex << int(opcode));
 
@@ -5358,4 +5389,38 @@ static void checkerboard(age::Renderer* renderer)
 void GameboyScreen::Draw()
 {
 	//checkerboard(m_renderer);
+	for (int y=0; y < 144; ++y)
+	{
+		for (int x=0; x < 160; ++x)
+		{
+			auto value = display[y][x];
+			auto color = age::Color::Black();
+			switch (value) {
+				case 0:
+				{
+					color = age::Color::Red();
+					break;
+				}
+				case 1:
+				{
+					color = age::Color::Green();
+					break;
+				}
+				case 2:
+				{
+					color = age::Color::Blue();
+					break;
+				}
+				case 3:
+				{
+					color = age::Color::Yellow();
+					break;
+				}
+					
+				default:
+					abort();
+			}
+			m_renderer->DrawQuad(age::Rect(x,y, 1, 1), color);
+		}
+	}
 }
