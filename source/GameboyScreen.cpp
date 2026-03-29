@@ -586,47 +586,61 @@ struct GPUData
 	
 	void pixel_transfer()
 	{
-		for (int x=0; x < 20; ++x)
+		//std::cout << std::dec << std::setfill('0') << std::uppercase;
+		//std::cout << "LY:" << std::setw(2) << (int)read_memory(LY) << std::endl;
+		
+		auto ly = read_memory(LY);
+		if (false)
 		{
-			unsigned int address = TILEMAP0 + (read_memory(LY) * 32) + x;
-			unsigned char idx = read_memory(address);
-			
-			if (idx != 0x00)
+			for (int x=0; x < 20; ++x)
 			{
-				int yurt = 1;
+				for (int i=0; i < 8; ++i)
+					display[ly][(x * 8) + i] = 0x00;
 			}
-			
-			int accum = 0;
-			unsigned char tiledata[16];
-			for (int i=0; i < 16; ++i)
+		}
+		else
+		{
+			for (int x=0; x < 20; ++x)
 			{
-				tiledata[i] = read_memory(TILEBLOCK0 + (idx << 8) + i);
-				accum += tiledata[i];
-			}
-			
-			if (accum > 0)
-			{
-				int yurt = 1;
-			}
-			
-			auto line = read_memory(LY) % 8; // tile height
-			unsigned char first = tiledata[line * 2];
-			unsigned char second = tiledata[(line * 2) + 1];
-			
-			unsigned char combined[8];
-			unsigned char bit = 0x01;
-			for(int i=0; i < 8; ++i)
-			{
-				combined[i] = ((second & 0x01) << 1);
-				combined[i] = combined[i] | (first & 0x01);
-			
-				first = first >> 1;
-				second = second >> 1;
+				unsigned int address = TILEMAP0 + (read_memory(LY) / 8 * 32) + x;
+				unsigned char idx = read_memory(address);
 				
-				display[read_memory(LY)][(x * 8) + i] = combined[i];
+				if (idx != 0x00)
+				{
+					int yurt = 1;
+				}
+				
+				int accum = 0;
+				unsigned char tiledata[16];
+				for (int i=0; i < 16; ++i)
+				{
+					tiledata[i] = read_memory(TILEBLOCK0 + (idx << 4) + i);
+					accum += tiledata[i];
+				}
+				
+				if (accum > 0)
+				{
+					int yurt = 1;
+				}
+				
+				auto line = read_memory(LY) % 8; // tile height
+				unsigned char first = tiledata[line * 2];
+				unsigned char second = tiledata[(line * 2) + 1];
+				
+				unsigned char combined[8];
+				for(int i=0; i < 8; ++i)
+				{
+					combined[i] = ((second & 0x01) << 1);
+					combined[i] = combined[i] | (first & 0x01);
+					
+					first = first >> 1;
+					second = second >> 1;
+					
+					display[read_memory(LY)][(x * 8) + i] = combined[i];
+				}
+				
+				
 			}
-			
-			
 		}
 		m_state = Mode::HBLANK;
 	}
@@ -5393,7 +5407,7 @@ void GameboyScreen::Draw()
 	{
 		for (int x=0; x < 160; ++x)
 		{
-			auto value = display[y][x];
+			auto value = display[y][x]; // y+16
 			auto color = age::Color::Black();
 			switch (value) {
 				case 0:
