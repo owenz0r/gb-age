@@ -52,7 +52,10 @@ constexpr unsigned int TMA = 0xFF06;
 constexpr unsigned int TAC = 0xFF07;
 
 constexpr unsigned int LY = 0xFF44;
+constexpr unsigned int LYC = 0xFF45;
 constexpr unsigned int LCDC = 0xFF40;
+
+constexpr unsigned int OAM = 0xFE00;
 
 static std::string console = "";
 static std::ofstream logfile;
@@ -74,7 +77,7 @@ static unsigned char read_memory(const unsigned int address)
 static void write_memory(const unsigned int address, unsigned char value)
 {
 	// if (address == TMA || address == TAC || address == IF || address == IE)
-	if (address == LCDC)
+	if (address == LYC)
 	{
 		int yurt = 1;
 	}
@@ -528,6 +531,14 @@ struct CPUData
 };
 CPUData CPU;
 
+struct OAMEntry
+{
+	unsigned char x;
+	unsigned char y;
+	unsigned char idx;
+	unsigned char flags;
+};
+
 struct GPUData
 {
 	unsigned int TILEMAP0 = 0x9800;
@@ -547,6 +558,10 @@ struct GPUData
 	Mode m_state = Mode::OAM_SEARCH;
 	
 	int ticks = 0;
+	int oam_idx = 0;
+	
+	unsigned char visible[10];
+	unsigned char visible_idx = 0;
 	
 	GPUData()
 	{
@@ -576,12 +591,35 @@ struct GPUData
 	
 	void oam_search()
 	{
-		ticks++;
-		if (ticks == 80)
+		if (ticks % 2 == 0)
 		{
-			ticks = 0;
-			m_state = Mode::PIXEL_TRANSFER;
+			if (visible_idx < 10)
+			{
+				OAMEntry entry;
+				entry.y 	= read_memory(OAM + (oam_idx * 4));
+				entry.x 	= read_memory(OAM + (oam_idx * 4) + 1);
+				entry.idx 	= read_memory(OAM + (oam_idx * 4) + 2);
+				entry.flags = read_memory(OAM + (oam_idx * 4) + 3);
+				
+				if (entry.x > 0)
+				{
+					auto ly = read_memory(LY);
+					if (ly  + 16  >= entry.y && ly + 16  < entry.y + 8)
+					{
+						visible[visible_idx++] = oam_idx;
+					}
+				}
+			}
+			
+			oam_idx++;
+			if (oam_idx == 40)
+			{
+				ticks = 0;
+				oam_idx = 0;
+				m_state = Mode::PIXEL_TRANSFER;
+			}
 		}
+		ticks++;
 	}
 	
 	void pixel_transfer()
@@ -602,7 +640,7 @@ struct GPUData
 		{
 			for (int x=0; x < 20; ++x)
 			{
-				unsigned int address = TILEMAP0 + (read_memory(LY) / 8 * 32) + x;
+				unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 2) * 32) + x;
 				unsigned char idx = read_memory(address);
 				
 				if (idx != 0x00)
@@ -638,8 +676,6 @@ struct GPUData
 					
 					display[read_memory(LY)][(x * 8) + i] = combined[i];
 				}
-				
-				
 			}
 		}
 		m_state = Mode::HBLANK;
@@ -665,6 +701,8 @@ struct GPUData
 		if (value >= 154)
 		{
 			write_memory(LY, 0); // should this pause for 1 more tick before setting to zero?
+			visible_idx = 0;
+			memset(visible, 0, 10);
 			m_state = Mode::OAM_SEARCH;
 		}
 	}
