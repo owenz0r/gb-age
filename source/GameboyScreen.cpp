@@ -591,6 +591,11 @@ struct GPUData
 	
 	void oam_search()
 	{
+		auto ly = read_memory(LY);
+		if (ly == 0)
+		{
+			int yurt = 1;
+		}
 		if (ticks % 2 == 0)
 		{
 			if (visible_idx < 10)
@@ -603,8 +608,8 @@ struct GPUData
 				
 				if (entry.x > 0)
 				{
-					auto ly = read_memory(LY);
-					if (ly  + 16  >= entry.y && ly + 16  < entry.y + 8)
+					//if (entry.y > 0 && ly + 16  >= entry.y && ly + 16 < entry.y + 8)
+					if (entry.y > 8 && ly >= entry.y - 16 && ly < entry.y - 8) // only handles 8x8
 					{
 						visible[visible_idx++] = oam_idx;
 					}
@@ -614,6 +619,10 @@ struct GPUData
 			oam_idx++;
 			if (oam_idx == 40)
 			{
+				if (visible_idx > 0)
+				{
+					int yurt = 1;
+				}
 				ticks = 0;
 				oam_idx = 0;
 				m_state = Mode::PIXEL_TRANSFER;
@@ -622,59 +631,82 @@ struct GPUData
 		ticks++;
 	}
 	
+	std::array<unsigned char, 8> readTileRow(unsigned int base, int idx, int row)
+	{
+		std::array<unsigned char, 8> result;
+		
+		unsigned char tiledata[16];
+		for (int i=0; i < 16; ++i)
+		{
+			tiledata[i] = read_memory(base + (idx << 4) + i);
+		}
+		
+		unsigned char first = tiledata[row * 2];
+		unsigned char second = tiledata[(row * 2) + 1];
+		
+		//unsigned char combined[8];
+		for(int i=0; i < 8; ++i)
+		{
+			result[7 - i] = ((second & 0x01) << 1);
+			result[7 - i] = result[7 - i] | (first & 0x01);
+			
+			first = first >> 1;
+			second = second >> 1;
+		}
+		
+		return result;
+	}
+	
 	void pixel_transfer()
 	{
 		//std::cout << std::dec << std::setfill('0') << std::uppercase;
 		//std::cout << "LY:" << std::setw(2) << (int)read_memory(LY) << std::endl;
 		
 		auto ly = read_memory(LY);
-		if (false)
+		for (int x=0; x < 20; ++x)
 		{
-			for (int x=0; x < 20; ++x)
+			//unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 2) * 32) + x;
+			unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 4) * 32) + x;
+			unsigned char idx = read_memory(address);
+			
+			unsigned char tiledata[16];
+			for (int i=0; i < 16; ++i)
 			{
-				for (int i=0; i < 8; ++i)
-					display[ly][(x * 8) + i] = 0x00;
+				tiledata[i] = read_memory(TILEBLOCK0 + (idx << 4) + i);
 			}
-		}
-		else
-		{
-			for (int x=0; x < 20; ++x)
+			
+			auto line = read_memory(LY) % 8; // tile height
+			unsigned char first = tiledata[line * 2];
+			unsigned char second = tiledata[(line * 2) + 1];
+			
+			unsigned char combined[8];
+			for(int i=0; i < 8; ++i)
 			{
-				unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 2) * 32) + x;
-				unsigned char idx = read_memory(address);
+				combined[i] = ((second & 0x01) << 1);
+				combined[i] = combined[i] | (first & 0x01);
 				
-				if (idx != 0x00)
+				first = first >> 1;
+				second = second >> 1;
+				
+				int xpos = (x * 8) + i;
+				display[read_memory(LY)][xpos] = combined[i];
+				//display[read_memory(LY)][xpos] = 0x04;
+				//xpos += 8;
+				
+				for (int j=0; j < visible_idx; ++j)
 				{
-					int yurt = 1;
-				}
-				
-				int accum = 0;
-				unsigned char tiledata[16];
-				for (int i=0; i < 16; ++i)
-				{
-					tiledata[i] = read_memory(TILEBLOCK0 + (idx << 4) + i);
-					accum += tiledata[i];
-				}
-				
-				if (accum > 0)
-				{
-					int yurt = 1;
-				}
-				
-				auto line = read_memory(LY) % 8; // tile height
-				unsigned char first = tiledata[line * 2];
-				unsigned char second = tiledata[(line * 2) + 1];
-				
-				unsigned char combined[8];
-				for(int i=0; i < 8; ++i)
-				{
-					combined[i] = ((second & 0x01) << 1);
-					combined[i] = combined[i] | (first & 0x01);
-					
-					first = first >> 1;
-					second = second >> 1;
-					
-					display[read_memory(LY)][(x * 8) + i] = combined[i];
+					OAMEntry entry;
+					entry.y 	= read_memory(OAM + (visible[j] * 4));
+					entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
+					entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
+					entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
+					if (xpos >= (entry.x - 8) && xpos < entry.x)
+					{
+						auto tile = readTileRow(TILEBLOCK0, entry.idx, ly + 16 - entry.y);
+						int tilex = xpos - entry.x;
+						//if (tile[xpos - entry.x] > 0x00)
+							display[read_memory(LY)][xpos] = tile[xpos - (entry.x - 8)];
+					}
 				}
 			}
 		}
@@ -688,9 +720,15 @@ struct GPUData
 		write_memory(LY, value);
 		
 		if (value < 144)
+		{
+			visible_idx = 0;
+			memset(visible, 0, 10);
 			m_state = Mode::OAM_SEARCH;
+		}
 		else
+		{
 			m_state = Mode::VBLANK;
+		}
 	}
 	void vblank()
 	{
@@ -5466,6 +5504,11 @@ void GameboyScreen::Draw()
 				case 3:
 				{
 					color = age::Color::Yellow();
+					break;
+				}
+				case 4:
+				{
+					color = age::Color::Black();
 					break;
 				}
 					
