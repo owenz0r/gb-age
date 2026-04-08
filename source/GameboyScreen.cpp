@@ -24,7 +24,7 @@ constexpr int display_size = display_width * display_height;
 constexpr int memory_size = 65536;
 constexpr int program_address = 0x0100;
 
-static int display[display_height][display_width];
+static unsigned char display[display_height][display_width];
 static char memory[memory_size];
 
 static unsigned int PC = program_address;
@@ -51,9 +51,10 @@ constexpr unsigned int TIMA = 0xFF05;
 constexpr unsigned int TMA = 0xFF06;
 constexpr unsigned int TAC = 0xFF07;
 
+constexpr unsigned int LCDC = 0xFF40;
+constexpr unsigned int STAT = 0xFF41;
 constexpr unsigned int LY = 0xFF44;
 constexpr unsigned int LYC = 0xFF45;
-constexpr unsigned int LCDC = 0xFF40;
 
 constexpr unsigned int OAM = 0xFE00;
 
@@ -77,6 +78,11 @@ static unsigned char read_memory(const unsigned int address)
 static void write_memory(const unsigned int address, unsigned char value)
 {
 	// if (address == TMA || address == TAC || address == IF || address == IE)
+	if (address == LCDC)
+	{
+		int yurt = 1;
+	}
+	
 	if (address == LYC)
 	{
 		int yurt = 1;
@@ -488,6 +494,19 @@ struct CPUData
 	void fetch()
 	{
 		//print_status();
+		
+		if (read_memory(LY) == read_memory(LYC))
+		{
+			auto ly = read_memory(LY);
+			auto value = read_memory(STAT);
+			value = value | 0x04;
+			write_memory(STAT, value);
+			
+			value = read_memory(IF);
+			value = value | 0x02;
+			write_memory(IF, value);
+			write_memory(LYC, 255);
+		}
 
 		handleInterrupts();
 
@@ -566,6 +585,15 @@ struct GPUData
 	GPUData()
 	{
 		write_memory(LY, 0);
+	}
+	
+	bool readLCDCbit(int bit)
+	{
+		assert(bit < 8);
+		auto lcdc = read_memory(LCDC);
+		unsigned char one = 0x01;
+		one = one << bit;
+		return one & lcdc;
 	}
 	
 	void tick()
@@ -663,6 +691,12 @@ struct GPUData
 		//std::cout << "LY:" << std::setw(2) << (int)read_memory(LY) << std::endl;
 		
 		auto ly = read_memory(LY);
+		
+		if (ly == 8)
+		{
+			int yurt = 1;
+		}
+		
 		for (int x=0; x < 20; ++x)
 		{
 			//unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 2) * 32) + x;
@@ -689,7 +723,15 @@ struct GPUData
 				second = second >> 1;
 				
 				int xpos = (x * 8) + i;
-				display[read_memory(LY)][xpos] = combined[i];
+				if (readLCDCbit(0)) // check BG enable flag
+				{
+					display[read_memory(LY)][xpos] = combined[i];
+				}
+				else
+				{
+					int yurt = 1;
+				}
+				
 				//display[read_memory(LY)][xpos] = 0x04;
 				//xpos += 8;
 				
@@ -704,8 +746,8 @@ struct GPUData
 					{
 						auto tile = readTileRow(TILEBLOCK0, entry.idx, ly + 16 - entry.y);
 						int tilex = xpos - entry.x;
-						//if (tile[xpos - entry.x] > 0x00)
-							display[read_memory(LY)][xpos] = tile[xpos - (entry.x - 8)];
+						//if (tile[xpos - (entry.x - 8)] > 0x00)
+						//	display[read_memory(LY)][xpos] = tile[xpos - (entry.x - 8)];
 					}
 				}
 			}
@@ -741,6 +783,7 @@ struct GPUData
 			write_memory(LY, 0); // should this pause for 1 more tick before setting to zero?
 			visible_idx = 0;
 			memset(visible, 0, 10);
+			memset(display, 4, display_size);
 			m_state = Mode::OAM_SEARCH;
 		}
 	}
@@ -1240,7 +1283,7 @@ void GameboyScreen::Init()
 	m_input->SetQuitCallback([this]() { m_engine->Quit(); });
 	m_input->m_keyupmap.insert({'c', [&] { m_continue = true; }});
 
-	memset(display, 0, sizeof(int) * display_size);
+	memset(display, 4, display_size);
 	memset(memory, 0, memory_size);
 
 	// std::string path = age::getResourcesPath().string() + "/Roms/01-special.gb";
