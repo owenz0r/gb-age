@@ -694,7 +694,14 @@ struct GPUData
 		
 		if (ly == 8)
 		{
-			int yurt = 1;
+			if (readLCDCbit(0)) // check BG enable flag
+			{
+				int yurt = 1;
+			}
+			else
+			{
+				int yurt = 1;
+			}
 		}
 		
 		for (int x=0; x < 20; ++x)
@@ -729,7 +736,7 @@ struct GPUData
 				}
 				else
 				{
-					int yurt = 1;
+					display[read_memory(LY)][xpos] = 0x00;
 				}
 				
 				//display[read_memory(LY)][xpos] = 0x04;
@@ -746,8 +753,8 @@ struct GPUData
 					{
 						auto tile = readTileRow(TILEBLOCK0, entry.idx, ly + 16 - entry.y);
 						int tilex = xpos - entry.x;
-						//if (tile[xpos - (entry.x - 8)] > 0x00)
-						//	display[read_memory(LY)][xpos] = tile[xpos - (entry.x - 8)];
+						if (tile[xpos - (entry.x - 8)] > 0x00)
+							display[read_memory(LY)][xpos] = tile[xpos - (entry.x - 8)];
 					}
 				}
 			}
@@ -769,22 +776,28 @@ struct GPUData
 		}
 		else
 		{
+			ticks = 0;
 			m_state = Mode::VBLANK;
 		}
 	}
 	void vblank()
 	{
-		unsigned char value = read_memory(LY);
-		value++;
-		write_memory(LY, value);
-		
-		if (value >= 154)
+		ticks++;
+		if (ticks > 456)
 		{
-			write_memory(LY, 0); // should this pause for 1 more tick before setting to zero?
-			visible_idx = 0;
-			memset(visible, 0, 10);
-			memset(display, 4, display_size);
-			m_state = Mode::OAM_SEARCH;
+			unsigned char value = read_memory(LY);
+			value++;
+			write_memory(LY, value);
+			ticks = 0;
+			
+			if (value >= 154)
+			{
+				write_memory(LY, 0); // should this pause for 1 more tick before setting to zero?
+				visible_idx = 0;
+				memset(visible, 0, 10);
+				//memset(display, 4, display_size);
+				m_state = Mode::OAM_SEARCH;
+			}
 		}
 	}
 	
