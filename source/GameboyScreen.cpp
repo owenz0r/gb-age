@@ -576,7 +576,7 @@ struct GPUData
 	};
 	Mode m_state = Mode::OAM_SEARCH;
 	
-	int ticks = 0;
+	int dots = 0;
 	int oam_idx = 0;
 	
 	unsigned char visible[10];
@@ -615,16 +615,13 @@ struct GPUData
 			default:
 				abort();
 		}
+		dots++;
 	}
 	
 	void oam_search()
 	{
 		auto ly = read_memory(LY);
-		if (ly == 0)
-		{
-			int yurt = 1;
-		}
-		if (ticks % 2 == 0)
+		if (dots % 2 == 0)
 		{
 			if (visible_idx < 10)
 			{
@@ -647,16 +644,12 @@ struct GPUData
 			oam_idx++;
 			if (oam_idx == 40)
 			{
-				if (visible_idx > 0)
-				{
-					int yurt = 1;
-				}
-				ticks = 0;
+				//ticks = 0;
 				oam_idx = 0;
 				m_state = Mode::PIXEL_TRANSFER;
 			}
 		}
-		ticks++;
+		//ticks++;
 	}
 	
 	std::array<unsigned char, 8> readTileRow(unsigned int base, int idx, int row)
@@ -691,18 +684,6 @@ struct GPUData
 		//std::cout << "LY:" << std::setw(2) << (int)read_memory(LY) << std::endl;
 		
 		auto ly = read_memory(LY);
-		
-		if (ly == 8)
-		{
-			if (readLCDCbit(0)) // check BG enable flag
-			{
-				int yurt = 1;
-			}
-			else
-			{
-				int yurt = 1;
-			}
-		}
 		
 		for (int x=0; x < 20; ++x)
 		{
@@ -764,31 +745,35 @@ struct GPUData
 	
 	void hblank()
 	{
-		unsigned char value = read_memory(LY);
-		value++;
-		write_memory(LY, value);
-		
-		if (value < 144)
-		{
-			visible_idx = 0;
-			memset(visible, 0, 10);
-			m_state = Mode::OAM_SEARCH;
-		}
-		else
-		{
-			ticks = 0;
-			m_state = Mode::VBLANK;
-		}
-	}
-	void vblank()
-	{
-		ticks++;
-		if (ticks > 456)
+		if (dots > 455)
 		{
 			unsigned char value = read_memory(LY);
 			value++;
 			write_memory(LY, value);
-			ticks = 0;
+			
+			if (value < 144)
+			{
+				visible_idx = 0;
+				memset(visible, 0, 10);
+				dots = 0;
+				m_state = Mode::OAM_SEARCH;
+			}
+			else
+			{
+				dots = 0;
+				m_state = Mode::VBLANK;
+			}
+		}
+	}
+	void vblank()
+	{
+		//ticks++;
+		if (dots > 456)
+		{
+			unsigned char value = read_memory(LY);
+			value++;
+			write_memory(LY, value);
+			dots = 0;
 			
 			if (value >= 154)
 			{
