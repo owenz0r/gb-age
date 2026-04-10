@@ -576,6 +576,7 @@ struct GPUData
 	};
 	Mode m_state = Mode::OAM_SEARCH;
 	
+	int xpos = 0;
 	int dots = 0;
 	int oam_idx = 0;
 	
@@ -646,6 +647,7 @@ struct GPUData
 			{
 				//ticks = 0;
 				oam_idx = 0;
+				xpos = 0;
 				m_state = Mode::PIXEL_TRANSFER;
 			}
 		}
@@ -657,9 +659,23 @@ struct GPUData
 		std::array<unsigned char, 8> result;
 		
 		unsigned char tiledata[16];
-		for (int i=0; i < 16; ++i)
+		if (base == TILEBLOCK0)
 		{
-			tiledata[i] = read_memory(base + (idx << 4) + i);
+			for (int i=0; i < 16; ++i)
+			{
+				tiledata[i] = read_memory(base + (idx << 4) + i);
+			}
+		}
+		else if (base == TILEBLOCK2)
+		{
+			if (idx > 128)
+			{
+				int yurt = 128;
+			}
+			for (int i=0; i < 16; ++i)
+			{
+				tiledata[i] = read_memory(base + ((char)idx * 16) + i);
+			}
 		}
 		
 		unsigned char first = tiledata[row * 2];
@@ -680,92 +696,69 @@ struct GPUData
 	
 	void pixel_transfer()
 	{
-		//std::cout << std::dec << std::setfill('0') << std::uppercase;
-		//std::cout << "LY:" << std::setw(2) << (int)read_memory(LY) << std::endl;
-		
 		auto ly = read_memory(LY);
+		int tileidx = xpos / 8;
 		
-		for (int x=0; x < 20; ++x)
+		// draw background
+
+		unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 4) * 32) + tileidx;
+		unsigned char idx = read_memory(address);
+			
+		std::array<unsigned char, 8> tile;
+		tile = readTileRow(readLCDCbit(4) ? TILEBLOCK0 : TILEBLOCK2, idx, ly % 8);
+		
+		if (readLCDCbit(0)) // check BG enable flag
 		{
-			//unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 2) * 32) + x;
-			unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 4) * 32) + x;
-			unsigned char idx = read_memory(address);
-			
-			unsigned char tiledata[16];
-			if (readLCDCbit(4)) // $8000 method
+			display[read_memory(LY)][xpos] = tile[xpos % 8];
+		}
+		else
+		{
+			display[read_memory(LY)][xpos] = 0x00;
+		}
+		
+		// draw objects
+		
+		for (int j=visible_idx - 1; j >= 0; --j)
+		{
+			OAMEntry entry;
+			entry.y 	= read_memory(OAM + (visible[j] * 4));
+			entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
+			entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
+			entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
+			if (xpos >= (entry.x - 8) && xpos < entry.x)
 			{
-				for (int i=0; i < 16; ++i)
-				{
-					tiledata[i] = read_memory(TILEBLOCK0 + (idx * 16) + i);
-				}
-			}
-			else // $8800 method
-			{
-				if (idx > 128)
-				{
-					int yurt = 1;
-				}
-				for (int i=0; i < 16; ++i)
-				{
-					tiledata[i] = read_memory(TILEBLOCK2 + ((char)idx * 16) + i);
-				}
-			}
-			
-			
-			auto line = read_memory(LY) % 8; // tile height
-			unsigned char first = tiledata[line * 2];
-			unsigned char second = tiledata[(line * 2) + 1];
-			
-			unsigned char combined[8];
-			for(int i=0; i < 8; ++i)
-			{
-				combined[i] = ((second & 0x01) << 1);
-				combined[i] = combined[i] | (first & 0x01);
+				bool flipx = entry.flags & (0x01 << 5);
+				bool flipy = entry.flags & (0x01 << 6);
 				
-				first = first >> 1;
-				second = second >> 1;
+				int tiley = ly + 16 - entry.y;
+				if (flipy)
+					tiley = 7 - tiley;	// 16 height tiles???
 				
-				int xpos = (x * 8) + i;
-				if (readLCDCbit(0)) // check BG enable flag
-				{
-					display[read_memory(LY)][xpos] = combined[i];
-				}
-				else
-				{
-					display[read_memory(LY)][xpos] = 0x00;
-				}
+				auto tile = readTileRow(TILEBLOCK0, entry.idx, tiley);
+				int tilex = xpos - (entry.x - 8);
+				if (flipx)
+					tilex = 7 - tilex;
 				
-				//display[read_memory(LY)][xpos] = 0x04;
-				//xpos += 8;
-				
-				for (int j=0; j < visible_idx; ++j)
+				if (tile[tilex] > 0x00)
 				{
-					OAMEntry entry;
-					entry.y 	= read_memory(OAM + (visible[j] * 4));
-					entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
-					entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
-					entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
-					if (xpos >= (entry.x - 8) && xpos < entry.x)
+					bool bgpriority = entry.flags & (0x01 << 7);	// check if BG has priority
+					if (bgpriority)
 					{
-						bool flipx = entry.flags & (0x01 << 5);
-						bool flipy = entry.flags & (0x01 << 6);
-						
-						int tiley = ly + 16 - entry.y;
-						if (flipy)
-							tiley = 7 - tiley;	// 16 height tiles???
-						
-						auto tile = readTileRow(TILEBLOCK0, entry.idx, tiley);
-						int tilex = xpos - (entry.x - 8);
-						if (flipx)
-							tilex = 7 - tilex;
-						
-						if (tile[tilex] > 0x00)
+						if (display[read_memory(LY)][xpos] == 0x00)
 							display[read_memory(LY)][xpos] = tile[tilex];
+					}
+					else
+					{
+						display[read_memory(LY)][xpos] = tile[tilex];
 					}
 				}
 			}
 		}
-		m_state = Mode::HBLANK;
+		
+		if (xpos > 159)
+			m_state = Mode::HBLANK;
+		else
+			xpos++;
 	}
 	
 	void hblank()
