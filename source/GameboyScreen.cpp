@@ -692,10 +692,25 @@ struct GPUData
 			unsigned char idx = read_memory(address);
 			
 			unsigned char tiledata[16];
-			for (int i=0; i < 16; ++i)
+			if (readLCDCbit(4)) // $8000 method
 			{
-				tiledata[i] = read_memory(TILEBLOCK0 + (idx << 4) + i);
+				for (int i=0; i < 16; ++i)
+				{
+					tiledata[i] = read_memory(TILEBLOCK0 + (idx * 16) + i);
+				}
 			}
+			else // $8800 method
+			{
+				if (idx > 128)
+				{
+					int yurt = 1;
+				}
+				for (int i=0; i < 16; ++i)
+				{
+					tiledata[i] = read_memory(TILEBLOCK2 + ((char)idx * 16) + i);
+				}
+			}
+			
 			
 			auto line = read_memory(LY) % 8; // tile height
 			unsigned char first = tiledata[line * 2];
@@ -732,10 +747,20 @@ struct GPUData
 					entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
 					if (xpos >= (entry.x - 8) && xpos < entry.x)
 					{
-						auto tile = readTileRow(TILEBLOCK0, entry.idx, ly + 16 - entry.y);
-						int tilex = xpos - entry.x;
-						if (tile[xpos - (entry.x - 8)] > 0x00)
-							display[read_memory(LY)][xpos] = tile[xpos - (entry.x - 8)];
+						bool flipx = entry.flags & (0x01 << 5);
+						bool flipy = entry.flags & (0x01 << 6);
+						
+						int tiley = ly + 16 - entry.y;
+						if (flipy)
+							tiley = 7 - tiley;	// 16 height tiles???
+						
+						auto tile = readTileRow(TILEBLOCK0, entry.idx, tiley);
+						int tilex = xpos - (entry.x - 8);
+						if (flipx)
+							tilex = 7 - tilex;
+						
+						if (tile[tilex] > 0x00)
+							display[read_memory(LY)][xpos] = tile[tilex];
 					}
 				}
 			}
