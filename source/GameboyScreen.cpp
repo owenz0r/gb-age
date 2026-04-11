@@ -56,6 +56,9 @@ constexpr unsigned int STAT = 0xFF41;
 constexpr unsigned int LY = 0xFF44;
 constexpr unsigned int LYC = 0xFF45;
 
+constexpr unsigned int WY = 0xFF4A; // windows Y
+constexpr unsigned int WX = 0xFF4B; // window X+7 - (WX 7, WY 0) places the window top left
+
 constexpr unsigned int OAM = 0xFE00;
 
 static std::string console = "";
@@ -577,8 +580,11 @@ struct GPUData
 	Mode m_state = Mode::OAM_SEARCH;
 	
 	int xpos = 0;
+	int windowY = 0;
 	int dots = 0;
 	int oam_idx = 0;
+	
+	bool windowDisplayed = false;
 	
 	unsigned char visible[10];
 	unsigned char visible_idx = 0;
@@ -668,10 +674,6 @@ struct GPUData
 		}
 		else if (base == TILEBLOCK2)
 		{
-			if (idx > 128)
-			{
-				int yurt = 128;
-			}
 			for (int i=0; i < 16; ++i)
 			{
 				tiledata[i] = read_memory(base + ((char)idx * 16) + i);
@@ -701,15 +703,38 @@ struct GPUData
 		
 		// draw background
 
-		unsigned int address = TILEMAP0 + (((read_memory(LY) / 8) + 4) * 32) + tileidx;
-		unsigned char idx = read_memory(address);
-			
-		std::array<unsigned char, 8> tile;
-		tile = readTileRow(readLCDCbit(4) ? TILEBLOCK0 : TILEBLOCK2, idx, ly % 8);
+		
 		
 		if (readLCDCbit(0)) // check BG enable flag
 		{
-			display[read_memory(LY)][xpos] = tile[xpos % 8];
+			// window
+			auto wx = read_memory(WX);
+			auto wy = read_memory(WY);
+			
+			bool windowPixel = (ly >= wy) && (xpos >= (wx - 7));
+			if (readLCDCbit(5) && windowPixel)
+			{
+				// window
+				windowDisplayed = true;
+				unsigned int tilemap = readLCDCbit(6) ? TILEMAP1 : TILEMAP0;
+				unsigned int address = tilemap + (((windowY / 8)) * 32) + ((xpos - (wx - 7)) / 8);
+				unsigned char idx = read_memory(address);
+				
+				auto tilerow = readTileRow(readLCDCbit(4) ? TILEBLOCK0 : TILEBLOCK2, idx, windowY % 8);
+				
+				display[read_memory(LY)][xpos] = tilerow[(xpos - (wx - 7)) % 8];
+			}
+			else
+			{
+				// background
+				unsigned int tilemap = readLCDCbit(3) ? TILEMAP1 : TILEMAP0;
+				unsigned int address = tilemap + (((read_memory(LY) / 8) + 4) * 32) + tileidx;
+				unsigned char idx = read_memory(address);
+				
+				auto tilerow = readTileRow(readLCDCbit(4) ? TILEBLOCK0 : TILEBLOCK2, idx, ly % 8);
+				
+				display[read_memory(LY)][xpos] = tilerow[xpos % 8];
+			}
 		}
 		else
 		{
@@ -769,6 +794,12 @@ struct GPUData
 			value++;
 			write_memory(LY, value);
 			
+			if (windowDisplayed)
+			{
+				windowY++;
+				windowDisplayed = false;
+			}
+			
 			if (value < 144)
 			{
 				visible_idx = 0;
@@ -797,6 +828,7 @@ struct GPUData
 			{
 				write_memory(LY, 0); // should this pause for 1 more tick before setting to zero?
 				visible_idx = 0;
+				windowY = 0;
 				memset(visible, 0, 10);
 				//memset(display, 4, display_size);
 				m_state = Mode::OAM_SEARCH;
