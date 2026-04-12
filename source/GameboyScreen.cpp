@@ -56,6 +56,10 @@ constexpr unsigned int STAT = 0xFF41;
 constexpr unsigned int LY = 0xFF44;
 constexpr unsigned int LYC = 0xFF45;
 
+constexpr unsigned int BGP = 0xFF47;
+constexpr unsigned int OBP0 = 0xFF48;
+constexpr unsigned int OBP1 = 0xFF49;
+
 constexpr unsigned int WY = 0xFF4A; // windows Y
 constexpr unsigned int WX = 0xFF4B; // window X+7 - (WX 7, WY 0) places the window top left
 
@@ -702,8 +706,6 @@ struct GPUData
 		int tileidx = xpos / 8;
 		
 		// draw background
-
-		
 		
 		if (readLCDCbit(0)) // check BG enable flag
 		{
@@ -752,6 +754,7 @@ struct GPUData
 			entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
 			if (xpos >= (entry.x - 8) && xpos < entry.x)
 			{
+				bool palette = entry.flags & (0x01 << 4);
 				bool flipx = entry.flags & (0x01 << 5);
 				bool flipy = entry.flags & (0x01 << 6);
 				
@@ -766,15 +769,23 @@ struct GPUData
 				
 				if (tile[tilex] > 0x00)
 				{
+					auto color = tile[tilex];
+					if (palette)	// use alternate color palette
+					{
+						auto pal = read_memory(OBP1);
+						pal = (pal >> (color * 2)) & 0x03;
+						color = pal;
+					}
+					
 					bool bgpriority = entry.flags & (0x01 << 7);	// check if BG has priority
 					if (bgpriority)
 					{
 						if (display[read_memory(LY)][xpos] == 0x00)
-							display[read_memory(LY)][xpos] = tile[tilex];
+							display[read_memory(LY)][xpos] = color;
 					}
 					else
 					{
-						display[read_memory(LY)][xpos] = tile[tilex];
+						display[read_memory(LY)][xpos] = color;
 					}
 				}
 			}
@@ -5579,27 +5590,27 @@ void GameboyScreen::Draw()
 			switch (value) {
 				case 0:
 				{
-					color = age::Color::Red();
+					color = age::Color::White();
 					break;
 				}
 				case 1:
 				{
-					color = age::Color::Green();
+					color = age::Color::LightGray();
 					break;
 				}
 				case 2:
 				{
-					color = age::Color::Blue();
+					color = age::Color::DarkGray();
 					break;
 				}
 				case 3:
 				{
-					color = age::Color::Yellow();
+					color = age::Color::Black();
 					break;
 				}
 				case 4:
 				{
-					color = age::Color::Black();
+					color = age::Color::Red();
 					break;
 				}
 					
