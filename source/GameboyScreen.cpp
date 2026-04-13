@@ -744,48 +744,50 @@ struct GPUData
 		}
 		
 		// draw objects
-		
-		for (int j=visible_idx - 1; j >= 0; --j)
+		if (readLCDCbit(1)) // object enable
 		{
-			OAMEntry entry;
-			entry.y 	= read_memory(OAM + (visible[j] * 4));
-			entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
-			entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
-			entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
-			if (xpos >= (entry.x - 8) && xpos < entry.x)
+			for (int j=visible_idx - 1; j >= 0; --j)
 			{
-				bool palette = entry.flags & (0x01 << 4);
-				bool flipx = entry.flags & (0x01 << 5);
-				bool flipy = entry.flags & (0x01 << 6);
-				
-				int tiley = ly + 16 - entry.y;
-				if (flipy)
-					tiley = 7 - tiley;	// 16 height tiles???
-				
-				auto tile = readTileRow(TILEBLOCK0, entry.idx, tiley);
-				int tilex = xpos - (entry.x - 8);
-				if (flipx)
-					tilex = 7 - tilex;
-				
-				if (tile[tilex] > 0x00)
+				OAMEntry entry;
+				entry.y 	= read_memory(OAM + (visible[j] * 4));
+				entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
+				entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
+				entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
+				if (xpos >= (entry.x - 8) && xpos < entry.x)
 				{
-					auto color = tile[tilex];
-					if (palette)	// use alternate color palette
-					{
-						auto pal = read_memory(OBP1);
-						pal = (pal >> (color * 2)) & 0x03;
-						color = pal;
-					}
+					bool palette = entry.flags & (0x01 << 4);
+					bool flipx = entry.flags & (0x01 << 5);
+					bool flipy = entry.flags & (0x01 << 6);
 					
-					bool bgpriority = entry.flags & (0x01 << 7);	// check if BG has priority
-					if (bgpriority)
+					int tiley = ly + 16 - entry.y;
+					if (flipy)
+						tiley = 7 - tiley;	// 16 height tiles???
+					
+					auto tile = readTileRow(TILEBLOCK0, entry.idx, tiley);
+					int tilex = xpos - (entry.x - 8);
+					if (flipx)
+						tilex = 7 - tilex;
+					
+					if (tile[tilex] > 0x00)
 					{
-						if (display[read_memory(LY)][xpos] == 0x00)
+						auto color = tile[tilex];
+						if (palette)	// use alternate color palette
+						{
+							auto pal = read_memory(OBP1);
+							pal = (pal >> (color * 2)) & 0x03;
+							color = pal;
+						}
+						
+						bool bgpriority = entry.flags & (0x01 << 7);	// check if BG has priority
+						if (bgpriority)
+						{
+							if (display[read_memory(LY)][xpos] == 0x00)
+								display[read_memory(LY)][xpos] = color;
+						}
+						else
+						{
 							display[read_memory(LY)][xpos] = color;
-					}
-					else
-					{
-						display[read_memory(LY)][xpos] = color;
+						}
 					}
 				}
 			}
