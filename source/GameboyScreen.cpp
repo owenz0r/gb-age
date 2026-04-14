@@ -644,10 +644,19 @@ struct GPUData
 				
 				if (entry.x > 0)
 				{
-					//if (entry.y > 0 && ly + 16  >= entry.y && ly + 16 < entry.y + 8)
-					if (entry.y > 8 && ly >= entry.y - 16 && ly < entry.y - 8) // only handles 8x8
+					if (readLCDCbit(2)) // obj size 16
 					{
-						visible[visible_idx++] = oam_idx;
+						if (entry.y > 0 && ly >= entry.y - 16 && ly < entry.y)
+						{
+							visible[visible_idx++] = oam_idx;
+						}
+					}
+					else // obj size 8
+					{
+						if (entry.y > 8 && ly >= entry.y - 16 && ly < entry.y - 8)
+						{
+							visible[visible_idx++] = oam_idx;
+						}
 					}
 				}
 			}
@@ -668,17 +677,17 @@ struct GPUData
 	{
 		std::array<unsigned char, 8> result;
 		
-		unsigned char tiledata[16];
+		unsigned char tiledata[32];
 		if (base == TILEBLOCK0)
 		{
-			for (int i=0; i < 16; ++i)
+			for (int i=0; i < 32; ++i)
 			{
 				tiledata[i] = read_memory(base + (idx << 4) + i);
 			}
 		}
 		else if (base == TILEBLOCK2)
 		{
-			for (int i=0; i < 16; ++i)
+			for (int i=0; i < 32; ++i)
 			{
 				tiledata[i] = read_memory(base + ((char)idx * 16) + i);
 			}
@@ -753,6 +762,7 @@ struct GPUData
 				entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
 				entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
 				entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
+				
 				if (xpos >= (entry.x - 8) && xpos < entry.x)
 				{
 					bool palette = entry.flags & (0x01 << 4);
@@ -761,9 +771,19 @@ struct GPUData
 					
 					int tiley = ly + 16 - entry.y;
 					if (flipy)
-						tiley = 7 - tiley;	// 16 height tiles???
+					{
+						if (readLCDCbit(2)) // obj size
+						{
+							tiley = 15 - tiley;
+						}
+						else
+						{
+							tiley = 7 - tiley;
+						}
+					}
 					
-					auto tile = readTileRow(TILEBLOCK0, entry.idx, tiley);
+					// bit 0 of idx is ignored for 8x16 tiles
+					auto tile = readTileRow(TILEBLOCK0, readLCDCbit(2) ? entry.idx & 0xFFFE : entry.idx, tiley);
 					int tilex = xpos - (entry.x - 8);
 					if (flipx)
 						tilex = 7 - tilex;
