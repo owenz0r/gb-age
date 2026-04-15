@@ -53,6 +53,10 @@ constexpr unsigned int TAC = 0xFF07;
 
 constexpr unsigned int LCDC = 0xFF40;
 constexpr unsigned int STAT = 0xFF41;
+
+constexpr unsigned int SCY = 0xFF42;
+constexpr unsigned int SCX = 0xFF43;
+
 constexpr unsigned int LY = 0xFF44;
 constexpr unsigned int LYC = 0xFF45;
 
@@ -712,7 +716,9 @@ struct GPUData
 	void pixel_transfer()
 	{
 		auto ly = read_memory(LY);
-		int tileidx = xpos / 8;
+		auto scx = read_memory(SCX);
+		auto scxpos = (xpos + scx) % 256;
+		int xtile = scxpos / 8;
 		
 		// draw background
 		
@@ -737,14 +743,18 @@ struct GPUData
 			}
 			else
 			{
+				auto scy = read_memory(SCY);
+				auto scypos = (read_memory(LY) + scy) % 256;
+				auto ytile = scypos / 8;
+				
 				// background
 				unsigned int tilemap = readLCDCbit(3) ? TILEMAP1 : TILEMAP0;
-				unsigned int address = tilemap + (((read_memory(LY) / 8) + 4) * 32) + tileidx;
+				unsigned int address = tilemap + (ytile * 32) + xtile;
 				unsigned char idx = read_memory(address);
 				
 				auto tilerow = readTileRow(readLCDCbit(4) ? TILEBLOCK0 : TILEBLOCK2, idx, ly % 8);
 				
-				display[read_memory(LY)][xpos] = tilerow[xpos % 8];
+				display[read_memory(LY)][xpos] = tilerow[scxpos % 8];
 			}
 		}
 		else
@@ -755,13 +765,42 @@ struct GPUData
 		// draw objects
 		if (readLCDCbit(1)) // object enable
 		{
-			for (int j=visible_idx - 1; j >= 0; --j)
+			int selected = -1;
+			for (int j=0; j < visible_idx; ++j)
 			{
 				OAMEntry entry;
 				entry.y 	= read_memory(OAM + (visible[j] * 4));
 				entry.x 	= read_memory(OAM + (visible[j] * 4) + 1);
 				entry.idx 	= read_memory(OAM + (visible[j] * 4) + 2);
 				entry.flags = read_memory(OAM + (visible[j] * 4) + 3);
+				
+				if (xpos >= (entry.x - 8) && xpos < entry.x)
+				{
+					if (selected == -1)
+					{
+						selected = j;
+					}
+					else
+					{
+						OAMEntry other;
+						other.y 	= read_memory(OAM + (visible[selected] * 4));
+						other.x 	= read_memory(OAM + (visible[selected] * 4) + 1);
+						other.idx 	= read_memory(OAM + (visible[selected] * 4) + 2);
+						other.flags = read_memory(OAM + (visible[selected] * 4) + 3);
+						
+						if (entry.x < other.x)
+							selected = j;
+					}
+				}
+			}
+			
+			if (selected > -1)
+			{
+				OAMEntry entry;
+				entry.y 	= read_memory(OAM + (visible[selected] * 4));
+				entry.x 	= read_memory(OAM + (visible[selected] * 4) + 1);
+				entry.idx 	= read_memory(OAM + (visible[selected] * 4) + 2);
+				entry.flags = read_memory(OAM + (visible[selected] * 4) + 3);
 				
 				if (xpos >= (entry.x - 8) && xpos < entry.x)
 				{
@@ -1382,8 +1421,10 @@ void GameboyScreen::Init()
 	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
-	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 	std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
+	//std::string path = "/Users/owenz0r/Downloads/pokemon.gb";
+	//std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
