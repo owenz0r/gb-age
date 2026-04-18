@@ -27,6 +27,8 @@ constexpr int program_address = 0x0100;
 static unsigned char display[display_height][display_width];
 static char memory[memory_size];
 
+static unsigned int SYSCLK = 0x0000;
+
 static unsigned int PC = program_address;
 static unsigned int PEND = 0xFFFF;
 static unsigned int SP;
@@ -47,6 +49,7 @@ constexpr unsigned int SC = 0xFF02;
 constexpr unsigned int IE = 0xFFFF;
 constexpr unsigned int IF = 0xFF0F;
 
+constexpr unsigned int DIV = 0xFF04;
 constexpr unsigned int TIMA = 0xFF05;
 constexpr unsigned int TMA = 0xFF06;
 constexpr unsigned int TAC = 0xFF07;
@@ -79,6 +82,11 @@ static unsigned char read_memory(const unsigned int address)
 		int yurt = 1;
 	}
 	
+	if (address == IE)
+	{
+		int yurt = 1;
+	}
+	
 	//if (address == 0xFF44)
 	//	return 0x90;
 	if (address == 0xFF4D)
@@ -88,16 +96,18 @@ static unsigned char read_memory(const unsigned int address)
 
 static void write_memory(const unsigned int address, unsigned char value)
 {
-	// if (address == TMA || address == TAC || address == IF || address == IE)
-	if (address == LCDC)
+	if (address == DIV)
+	{
+		SYSCLK = 0x0000;
+		memory[DIV] = 0x00;
+		return;
+	}
+	
+	if (address == IE && value > 0)
 	{
 		int yurt = 1;
 	}
 	
-	if (address == LYC)
-	{
-		int yurt = 1;
-	}
 	memory[address] = value;
 }
 
@@ -113,6 +123,7 @@ struct OpcodeTimingData
 };
 
 OpcodeTimingData opTimeData[0xFF];
+OpcodeTimingData cbTimeData[0xFF];
 
 static void initOpcodeTimingData()
 {
@@ -363,7 +374,7 @@ static void initOpcodeTimingData()
 	opTimeData[0xAB].set(4, 4);
 	opTimeData[0xBB].set(4, 4);
 
-	opTimeData[0xCB].set(4, 4);
+	opTimeData[0xCB].set(8, 8);
 	opTimeData[0xDB].set(4, 4);
 	opTimeData[0xEB].set(4, 4);
 	opTimeData[0xFB].set(4, 4);
@@ -451,6 +462,52 @@ static void initOpcodeTimingData()
 	opTimeData[0xDF].set(16, 16);
 	opTimeData[0xEF].set(16, 16);
 	opTimeData[0xFF].set(16, 16);
+	
+	for (int i = 0x00; i < 0xFF; ++i)
+		cbTimeData[i].set(8, 8);
+	
+	// 0xX6
+	cbTimeData[0x06].set(16, 16);
+	cbTimeData[0x16].set(16, 16);
+	cbTimeData[0x26].set(16, 16);
+	cbTimeData[0x36].set(16, 16);
+	
+	cbTimeData[0x46].set(12, 12);
+	cbTimeData[0x56].set(12, 12);
+	cbTimeData[0x66].set(12, 12);
+	cbTimeData[0x76].set(12, 12);
+	
+	cbTimeData[0x86].set(16, 16);
+	cbTimeData[0x96].set(16, 16);
+	cbTimeData[0xA6].set(16, 16);
+	cbTimeData[0xB6].set(16, 16);
+	
+	cbTimeData[0xC6].set(16, 16);
+	cbTimeData[0xD6].set(16, 16);
+	cbTimeData[0xE6].set(16, 16);
+	cbTimeData[0xF6].set(16, 16);
+	
+	// 0xXE
+	
+	cbTimeData[0x0E].set(16, 16);
+	cbTimeData[0x1E].set(16, 16);
+	cbTimeData[0x2E].set(16, 16);
+	cbTimeData[0x3E].set(16, 16);
+	
+	cbTimeData[0x4E].set(12, 12);
+	cbTimeData[0x5E].set(12, 12);
+	cbTimeData[0x6E].set(12, 12);
+	cbTimeData[0x7E].set(12, 12);
+	
+	cbTimeData[0x8E].set(16, 16);
+	cbTimeData[0x9E].set(16, 16);
+	cbTimeData[0xAE].set(16, 16);
+	cbTimeData[0xBE].set(16, 16);
+	
+	cbTimeData[0xCE].set(16, 16);
+	cbTimeData[0xDE].set(16, 16);
+	cbTimeData[0xEE].set(16, 16);
+	cbTimeData[0xFE].set(16, 16);
 }
 
 static bool conditionHit = false;
@@ -506,6 +563,8 @@ struct CPUData
 	{
 		//print_status();
 		
+		handleInterrupts();
+		
 		if (read_memory(LY) == read_memory(LYC))
 		{
 			auto ly = read_memory(LY);
@@ -519,13 +578,19 @@ struct CPUData
 			write_memory(LYC, 255);
 		}
 
-		handleInterrupts();
-
 		if (!halt)
 		{
 			hasExecuted = false;
 			m_opcode = read_memory(PC++);
-			m_waitTicks = opTimeData[m_opcode].min - 2; // read + wait + execute = 4
+			if (m_opcode == 0xCB)
+			{
+				auto cb = read_memory(PC);
+				m_waitTicks = cbTimeData[cb].min - 2; // read + wait + execute = 4
+			}
+			else
+			{
+				m_waitTicks = opTimeData[m_opcode].min - 2; // read + wait + execute = 4
+			}
 			m_state = Mode::WAIT;
 		}
 	}
@@ -914,64 +979,111 @@ GPUData GPU;
 struct TimerData
 {
 	int ticks = 0;
+	unsigned int prev_sysclk = 0;
+	int prev_bit = 0;
+	bool overflow = false;
+	
+	TimerData()
+	{
+		write_memory(DIV, 0x00);
+	}
+	
 	void tick()
 	{
+		auto value = SYSCLK >> 8;
+		memory[DIV] = value;
+		
+		if (value > 0)
+		{
+			int yurt = 1;
+		}
+		
 		unsigned char tac = read_memory(TAC);
-		unsigned char enable = tac & 0x04;
+		bool enable = tac & 0x04;
+		
 		if (enable)
 		{
-			int mcount = 0;
-			unsigned char select = tac & 0x03;
-			switch (select)
-			{
-				case 0x00:
-					{
-						mcount = 256;
-						break;
-					}
-				case 0x01:
-					{
-						mcount = 4;
-						break;
-					}
-				case 0x02:
-					{
-						mcount = 16;
-						break;
-					}
-				case 0x03:
-					{
-						mcount = 64;
-						break;
-					}
-				default:
-					{
-						abort();
-					}
-			}
+			int yurt = 1;
+		}
 
-			if (ticks / 4 == mcount)
+		//int prev_bit = 0;
+		bool bit = false;
+		//int mcount = 0;
+		unsigned char select = tac & 0x03;
+		switch (select)
+		{
+			case 0x00:
+				{
+					bit = (SYSCLK >> 9) & 0x01;
+					//prev_bit = (prev_sysclk >> 9) & 0x01;
+					//mcount = 256;
+					break;
+				}
+			case 0x01:
+				{
+					bit = (SYSCLK >> 3) & 0x01;
+					//prev_bit = (prev_sysclk >> 3) & 0x01;
+					//mcount = 4;
+					break;
+				}
+			case 0x02:
+				{
+					bit = (SYSCLK >> 5) & 0x01;
+					//prev_bit = (prev_sysclk >> 5) & 0x01;
+					//mcount = 16;
+					break;
+				}
+			case 0x03:
+				{
+					bit = (SYSCLK >> 7) & 0x01;
+					//prev_bit = (prev_sysclk >> 7) & 0x01;
+					//mcount = 64;
+					break;
+				}
+			default:
+				{
+					abort();
+				}
+		}
+		
+		if (overflow)
+		{
+			if (ticks > 3)
 			{
-				if ((unsigned char)read_memory(TIMA) == 0xFF)
-				{
-					write_memory(IF, read_memory(IF) | 0x04);
-					write_memory(TIMA, read_memory(TMA));
-					ticks = 0;
-				}
-				else
-				{
-					unsigned char tma = read_memory(TMA);
-					unsigned char value = read_memory(TIMA);
-					value++;
-					write_memory(TIMA, value);
-				}
-				ticks = 1;
+				overflow = false;
+				write_memory(IF, read_memory(IF) | 0x04);
+				write_memory(TIMA, read_memory(TMA));
 			}
 			else
 			{
 				ticks++;
 			}
 		}
+		
+		if (bit)
+		{
+			int yurt = 1;
+		}
+		
+		bit = bit && enable;
+
+		//if (ticks / 4 == mcount)
+		if (prev_bit == 1 && bit == 0)
+		{
+			if ((unsigned char)read_memory(TIMA) == 0xFF)
+			{
+				overflow = true;
+				ticks = 0;
+			}
+
+			unsigned char value = read_memory(TIMA);
+			value++;
+			write_memory(TIMA, value);
+			//ticks = 0;
+		}
+
+		prev_bit = bit;
+		prev_sysclk = SYSCLK;
 	}
 };
 TimerData Timer;
@@ -994,6 +1106,32 @@ static void print_status()
 	logfile << "PCMEM:" << std::setw(2) << (int)read_memory(PC) << "," << std::setw(2) << (int)read_memory(PC + 1)
 			<< "," << std::setw(2) << (int)read_memory(PC + 2) << "," << std::setw(2) << (int)read_memory(PC + 3)
 			<< std::endl;
+}
+
+static bool do_timings = false;
+static void log_timings()
+{
+	logfile << std::hex << std::setfill('0') << std::uppercase;
+	logfile << "SYSCLK:" << std::setw(4) << (int)SYSCLK << " ";
+	logfile << "DIV:" << std::setw(4) << (int)read_memory(DIV) << " ";
+	logfile << "OPCODE:" << std::setw(2) << (int)CPU.m_opcode << " ";
+	logfile << "TIMA:" << std::setw(2) << (int)read_memory(TIMA) << " ";
+	
+	logfile << std::endl;
+//	logfile << "F:" << std::setw(2) << (int)F << " ";
+//	logfile << "B:" << std::setw(2) << (int)B << " ";
+//	logfile << "C:" << std::setw(2) << (int)C << " ";
+//	logfile << "D:" << std::setw(2) << (int)D << " ";
+//	logfile << "E:" << std::setw(2) << (int)E << " ";
+//	logfile << "H:" << std::setw(2) << (int)H << " ";
+//	logfile << "L:" << std::setw(2) << (int)L << " ";
+//	
+//	logfile << "SP:" << std::setw(4) << (int)SP << " ";
+//	logfile << "PC:" << std::setw(4) << (int)PC << " ";
+//	
+//	logfile << "PCMEM:" << std::setw(2) << (int)read_memory(PC) << "," << std::setw(2) << (int)read_memory(PC + 1)
+//	<< "," << std::setw(2) << (int)read_memory(PC + 2) << "," << std::setw(2) << (int)read_memory(PC + 3)
+//	<< std::endl;
 }
 
 static std::string charToHex(unsigned char c)
@@ -1411,7 +1549,7 @@ void GameboyScreen::Init()
 	std::string path = "Z:/downloads/01-special.gb";
 #else
 	// std::string path = "/Users/owenz0r/Downloads/01-special.gb"; // - passed
-	//std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb"; // - passed
+	// std::string path = "/Users/owenz0r/Downloads/02-interrupts.gb"; // - passed
 	// std::string path = "/Users/owenz0r/Downloads/03-op sp,hl.gb"; // - passed
 	// std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
@@ -1422,9 +1560,10 @@ void GameboyScreen::Init()
 	// std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
 	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
-	std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
+	//std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
 	//std::string path = "/Users/owenz0r/Downloads/pokemon.gb";
-	//std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
+	std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
+	//std::string path = "/Users/owenz0r/Downloads/tetris.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -1473,9 +1612,13 @@ void GameboyScreen::Update(const double dt)
 {
 	if (m_continue)
 	{
+		//if (do_timings)
+		//	log_timings();
 		CPU.tick();
 		GPU.tick();
 		Timer.tick();
+		SYSCLK++;
+		SYSCLK = SYSCLK % 0xFFFF;
 	}
 }
 
@@ -1663,6 +1806,12 @@ static void executeOpcode(unsigned char opcode)
 		case 0x0A:
 			{
 				unsigned int address = B << 8 | C;
+				
+				if (address == IE)
+				{
+					int yurt = 1;
+				}
+				
 				A = read_memory(address);
 				DEBUG_LOG("LOAD A, (BC) - " << charToHex(address));
 
@@ -1763,6 +1912,12 @@ static void executeOpcode(unsigned char opcode)
 		case 0x1A:
 			{
 				unsigned int address = D << 8 | E;
+				
+				if (address == IE)
+				{
+					int yurt = 1;
+				}
+				
 				A = read_memory(address);
 				DEBUG_LOG("LOAD A, (DE) - " << charToHex(address));
 
@@ -1836,6 +1991,7 @@ static void executeOpcode(unsigned char opcode)
 				}
 				else
 				{
+					int no_jump = 1;
 					DEBUG_LOG("Jumping not taken");
 				}
 				break;
@@ -1951,6 +2107,12 @@ static void executeOpcode(unsigned char opcode)
 				DEBUG_LOG("LOAD A, (HL+)");
 
 				unsigned int address = H << 8 | L;
+				
+				if (address == IE)
+				{
+					int yurt = 1;
+				}
+				
 				A = read_memory(address++);
 				L = address & 0xFF;
 				H = address >> 8;
@@ -2115,6 +2277,12 @@ static void executeOpcode(unsigned char opcode)
 				DEBUG_LOG("LOAD A, (HL+)");
 
 				unsigned int address = H << 8 | L;
+				
+				if (address == IE)
+				{
+					int yurt = 1;
+				}
+				
 				A = read_memory(address--);
 				L = address & 0xFF;
 				H = address >> 8;
@@ -2150,6 +2318,11 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b2 = read_memory(PC++);
 				DEBUG_LOG("LOAD A, d8");
 				A = b2;
+				
+				if (b2 == 236)
+				{
+					int yurt = 1;
+				}
 
 				break;
 			}
@@ -2610,6 +2783,12 @@ static void executeOpcode(unsigned char opcode)
 		case 0x7E:
 			{
 				unsigned int address = H << 8 | L;
+				
+				if (address == IE)
+				{
+					int yurt = 1;
+				}
+				
 				A = read_memory(address);
 				DEBUG_LOG("LOAD A, (HL)");
 
@@ -3192,6 +3371,21 @@ static void executeOpcode(unsigned char opcode)
 				auto address = pop16();
 				DEBUG_LOG("RET - " << "0x" << intToHex(address));
 				PC = address;
+				
+				if (PC == 0xc31e)
+				{
+					int ret_stop_timer;
+				}
+				
+				if (PC == 0xc2e4)
+				{
+					int ret_start_timer_word;
+				}
+				
+				if (PC == 0xc31b)
+				{
+					int ret_start_timer;
+				}
 
 				break;
 			}
@@ -5064,6 +5258,27 @@ static void executeOpcode(unsigned char opcode)
 				push16(PC);
 
 				PC = b3 << 8 | b2;
+				
+				if (PC == 0xc2e9)
+				{
+					int stop_timer_word = 1;
+				}
+				
+				if (PC == 0xc2e0)
+				{
+					int stop_timer = 1;
+				}
+				
+				if (PC == 0xc2d5)
+				{
+					int start_timer = 1;
+					do_timings = true;
+				}
+				
+				if (PC == 0xc318)
+				{
+					int test_timer = 1;
+				}
 
 				if (PC == 0xc17e)
 				{
@@ -5292,6 +5507,11 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b2 = read_memory(PC++);
 				DEBUG_LOG("LD (a8), A - " << "0xFF" << charToHex(b2));
 				unsigned int address = 0xFF << 8 | b2;
+				
+				if (address == 0xFFFF) // IE
+				{
+					int yurt = 1;
+				}
 				write_memory(address, A);
 
 				break;
@@ -5403,6 +5623,17 @@ static void executeOpcode(unsigned char opcode)
 			{
 				unsigned char b2 = read_memory(PC++);
 				DEBUG_LOG("LD A, (a8) - " << "0xFF" << charToHex(b2));
+				
+				if (0xFF00 + b2 == IE)
+				{
+					int yurt = 1;
+				}
+				
+				if (0xFF00 + b2 == IF)
+				{
+					int yurt = 1;
+				}
+				
 				A = read_memory(0xFF00 + b2);
 
 				break;
