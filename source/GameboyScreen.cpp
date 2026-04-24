@@ -23,9 +23,13 @@ constexpr int display_height = 144;
 constexpr int display_size = display_width * display_height;
 constexpr int memory_size = 65536;
 constexpr int program_address = 0x0100;
+constexpr int bank_size = 16384;
 
 static unsigned char display[display_height][display_width];
 static char memory[memory_size];
+static char cartridge[1048576]; // 1MB
+static int num_banks = 2;
+static int mbc_type = 0;
 
 static unsigned int SYSCLK = 0x0000;
 
@@ -77,16 +81,6 @@ static std::ofstream logfile;
 
 static unsigned char read_memory(const unsigned int address)
 {
-	if (address == LCDC)
-	{
-		int yurt = 1;
-	}
-	
-	if (address == IE)
-	{
-		int yurt = 1;
-	}
-	
 	//if (address == 0xFF44)
 	//	return 0x90;
 	if (address == 0xFF4D)
@@ -103,9 +97,37 @@ static void write_memory(const unsigned int address, unsigned char value)
 		return;
 	}
 	
-	if (address == IE && value > 0)
+	if (mbc_type == 1)
 	{
-		int yurt = 1;
+		// enable RAM
+		if (address >= 0x0000 && address <= 0x1FFF)
+		{
+			// https://gbdev.io/pandocs/MBC1.html
+			abort();
+		}
+		
+		// ROM bank select
+		if (address >= 0x2000 && address <= 0x3FFF)
+		{
+			auto bank = value & 0x1F;
+			if (bank == 0x00)
+				bank = 0x01;
+			
+			memcpy(&memory[0x4000], &cartridge[bank_size * bank], bank_size);
+			return;
+		}
+		
+		// RAM bank select
+		if (address >= 0x4000 && address <= 0x5FFF)
+		{
+			abort();
+		}
+		
+		// Bank mode select
+		if (address >= 0x6000 && address <= 0x7FFF)
+		{
+			abort();
+		}
 	}
 	
 	memory[address] = value;
@@ -540,11 +562,28 @@ struct CPUData
 	int m_waitTicks = 0;
 	bool hasExecuted = false;
 	bool halt = false;
+	bool interrupt = false;
 
 	unsigned char m_opcode = 0x00;
 
 	void tick()
 	{
+		handleInterrupts();
+		
+		if (interrupt)
+		{
+			if (m_waitTicks < 20)
+			{
+				m_waitTicks++;
+			}
+			else
+			{
+				interrupt = false;
+				m_waitTicks = 0;
+			}
+			return;
+		}
+		
 		switch (m_state)
 		{
 			case Mode::FETCH:
@@ -562,8 +601,6 @@ struct CPUData
 	void fetch()
 	{
 		//print_status();
-		
-		handleInterrupts();
 		
 		if (read_memory(LY) == read_memory(LYC))
 		{
@@ -917,7 +954,7 @@ struct GPUData
 			}
 		}
 		
-		if (xpos > 159)
+		if (xpos >= 159)
 			m_state = Mode::HBLANK;
 		else
 			xpos++;
@@ -993,18 +1030,8 @@ struct TimerData
 		auto value = SYSCLK >> 8;
 		memory[DIV] = value;
 		
-		if (value > 0)
-		{
-			int yurt = 1;
-		}
-		
 		unsigned char tac = read_memory(TAC);
 		bool enable = tac & 0x04;
-		
-		if (enable)
-		{
-			int yurt = 1;
-		}
 
 		//int prev_bit = 0;
 		bool bit = false;
@@ -1058,11 +1085,6 @@ struct TimerData
 			{
 				ticks++;
 			}
-		}
-		
-		if (bit)
-		{
-			int yurt = 1;
 		}
 		
 		bit = bit && enable;
@@ -1554,16 +1576,16 @@ void GameboyScreen::Init()
 	// std::string path = "/Users/owenz0r/Downloads/04-op r,imm.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/05-op rp.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/06-ld r,r.gb"; - passed
-	// std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb"; - passed
+	// std::string path = "/Users/owenz0r/Downloads/07-jr,jp,call,ret,rst.gb";// - passed
 	// std::string path = "/Users/owenz0r/Downloads/08-misc instrs.gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/09-op r,r.gb"; - passed
 	// std::string path = "/Users/owenz0r/Downloads/10-bit ops.gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
-	//std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
-	//std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
-	//std::string path = "/Users/owenz0r/Downloads/pokemon.gb";
-	std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
-	//std::string path = "/Users/owenz0r/Downloads/tetris.gb";
+	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
+	// std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
+	// std::string path = "/Users/owenz0r/Downloads/pokemon.gb";
+	 std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
+	// std::string path = "/Users/owenz0r/Downloads/tetris.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -1573,8 +1595,11 @@ void GameboyScreen::Init()
 		input.seekg(0, input.end);
 		auto size = input.tellg();
 		input.seekg(0, input.beg);
-		input.read(&memory[0], size);
+		input.read(&cartridge[0], size);
 		input.close();
+		
+		size = std::min((int)size, memory_size);
+		memcpy(memory, cartridge, size);
 
 		PEND = program_address + size;
 		m_initialized = true;
@@ -1599,6 +1624,15 @@ void GameboyScreen::Init()
 	SP = 0xFFFE;
 	PC = 0x0100;
 	//PC = 0x0000;
+	
+	mbc_type = memory[0x147];
+	if (mbc_type > 1)
+		abort(); // unsupported
+	
+	auto rom_size = memory[0x148];
+	auto ram_size = memory[0x149];
+	
+	num_banks = 2 << rom_size;
 
 	logfile.open("log.txt");
 	if (!logfile.is_open())
@@ -1636,6 +1670,7 @@ static void handleInterrupts()
 			write_memory(IF, read_memory(IF) & 0xFE);
 			push16(PC);
 			PC = 0x0040;
+			CPU.interrupt = true;
 		}
 	}
 	else if (flag & 0x02 & enable & 0x02) // STAT
@@ -1647,6 +1682,7 @@ static void handleInterrupts()
 			write_memory(IF, read_memory(IF) & 0xFD);
 			push16(PC);
 			PC = 0x0048;
+			CPU.interrupt = true;
 		}
 	}
 	else if (flag & 0x04 & enable & 0x04) // Timer
@@ -1658,6 +1694,7 @@ static void handleInterrupts()
 			write_memory(IF, read_memory(IF) & 0xFB);
 			push16(PC);
 			PC = 0x0050;
+			CPU.interrupt = true;
 		}
 	}
 	else if (flag & 0x08 & enable & 0x08) // Serial
@@ -1669,6 +1706,7 @@ static void handleInterrupts()
 			write_memory(IF, read_memory(IF) & 0xF7);
 			push16(PC);
 			PC = 0x0058;
+			CPU.interrupt = true;
 		}
 	}
 	else if (flag & 0x10 & enable & 0x10) // Joypad
@@ -1680,6 +1718,7 @@ static void handleInterrupts()
 			write_memory(IF, read_memory(IF) & 0xEF);
 			push16(PC);
 			PC = 0x0060;
+			CPU.interrupt = true;
 		}
 	}
 }
@@ -1708,11 +1747,6 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b2 = read_memory(PC++);
 				unsigned char b3 = read_memory(PC++);
 				DEBUG_LOG("LOAD BC d16 - " << "0x" << charToHex(b3) << charToHex(b2));
-
-				if (b3 == 0x12)
-				{
-					int yurt = 1;
-				}
 
 				B = b3;
 				C = b2;
@@ -1806,11 +1840,6 @@ static void executeOpcode(unsigned char opcode)
 		case 0x0A:
 			{
 				unsigned int address = B << 8 | C;
-				
-				if (address == IE)
-				{
-					int yurt = 1;
-				}
 				
 				A = read_memory(address);
 				DEBUG_LOG("LOAD A, (BC) - " << charToHex(address));
@@ -1912,11 +1941,6 @@ static void executeOpcode(unsigned char opcode)
 		case 0x1A:
 			{
 				unsigned int address = D << 8 | E;
-				
-				if (address == IE)
-				{
-					int yurt = 1;
-				}
 				
 				A = read_memory(address);
 				DEBUG_LOG("LOAD A, (DE) - " << charToHex(address));
@@ -2108,11 +2132,6 @@ static void executeOpcode(unsigned char opcode)
 
 				unsigned int address = H << 8 | L;
 				
-				if (address == IE)
-				{
-					int yurt = 1;
-				}
-				
 				A = read_memory(address++);
 				L = address & 0xFF;
 				H = address >> 8;
@@ -2278,11 +2297,6 @@ static void executeOpcode(unsigned char opcode)
 
 				unsigned int address = H << 8 | L;
 				
-				if (address == IE)
-				{
-					int yurt = 1;
-				}
-				
 				A = read_memory(address--);
 				L = address & 0xFF;
 				H = address >> 8;
@@ -2318,11 +2332,6 @@ static void executeOpcode(unsigned char opcode)
 				unsigned char b2 = read_memory(PC++);
 				DEBUG_LOG("LOAD A, d8");
 				A = b2;
-				
-				if (b2 == 236)
-				{
-					int yurt = 1;
-				}
 
 				break;
 			}
@@ -2783,11 +2792,6 @@ static void executeOpcode(unsigned char opcode)
 		case 0x7E:
 			{
 				unsigned int address = H << 8 | L;
-				
-				if (address == IE)
-				{
-					int yurt = 1;
-				}
 				
 				A = read_memory(address);
 				DEBUG_LOG("LOAD A, (HL)");
@@ -5508,10 +5512,6 @@ static void executeOpcode(unsigned char opcode)
 				DEBUG_LOG("LD (a8), A - " << "0xFF" << charToHex(b2));
 				unsigned int address = 0xFF << 8 | b2;
 				
-				if (address == 0xFFFF) // IE
-				{
-					int yurt = 1;
-				}
 				write_memory(address, A);
 
 				break;
@@ -5623,16 +5623,6 @@ static void executeOpcode(unsigned char opcode)
 			{
 				unsigned char b2 = read_memory(PC++);
 				DEBUG_LOG("LD A, (a8) - " << "0xFF" << charToHex(b2));
-				
-				if (0xFF00 + b2 == IE)
-				{
-					int yurt = 1;
-				}
-				
-				if (0xFF00 + b2 == IF)
-				{
-					int yurt = 1;
-				}
 				
 				A = read_memory(0xFF00 + b2);
 
