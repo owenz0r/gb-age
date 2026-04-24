@@ -144,8 +144,8 @@ struct OpcodeTimingData
 	}
 };
 
-OpcodeTimingData opTimeData[0xFF];
-OpcodeTimingData cbTimeData[0xFF];
+OpcodeTimingData opTimeData[256];
+OpcodeTimingData cbTimeData[256];
 
 static void initOpcodeTimingData()
 {
@@ -485,7 +485,7 @@ static void initOpcodeTimingData()
 	opTimeData[0xEF].set(16, 16);
 	opTimeData[0xFF].set(16, 16);
 	
-	for (int i = 0x00; i < 0xFF; ++i)
+	for (int i = 0x00; i <= 0xFF; ++i)
 		cbTimeData[i].set(8, 8);
 	
 	// 0xX6
@@ -619,9 +619,20 @@ struct CPUData
 		{
 			hasExecuted = false;
 			m_opcode = read_memory(PC++);
+			
+			if (m_opcode == 0xFF)
+			{
+				int yurt = 1;
+			}
+			
 			if (m_opcode == 0xCB)
 			{
 				auto cb = read_memory(PC);
+				if (cb == 0xFF)
+				{
+					int yurt = 1;
+				}
+				
 				m_waitTicks = cbTimeData[cb].min - 2; // read + wait + execute = 4
 			}
 			else
