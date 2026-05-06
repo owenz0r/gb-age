@@ -17,6 +17,7 @@ int main(int, char**)
 					gameboy_width,			// game width units
 					gameboy_height,			// game height units
 					1.0 / 4194304.0))		// engine tick rate
+					//1.0 / 1000000.0))		// engine tick rate
 	{
 		auto start_screen = GameboyScreen();
 

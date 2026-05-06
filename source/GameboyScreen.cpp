@@ -18,6 +18,9 @@
 #define DEBUG_LOG(x)
 #endif
 
+static bool do_continue = true;
+static bool do_draw = false;
+
 constexpr int display_width = 160;
 constexpr int display_height = 144;
 constexpr int display_size = display_width * display_height;
@@ -47,6 +50,8 @@ static unsigned char D;
 static unsigned char E;
 static unsigned char H;
 static unsigned char L;
+
+constexpr unsigned int JOYP = 0xFF00;
 
 constexpr unsigned int SB = 0xFF01;
 constexpr unsigned int SC = 0xFF02;
@@ -81,6 +86,10 @@ static std::ofstream logfile;
 
 static unsigned char read_memory(const unsigned int address)
 {
+	if (address == JOYP)
+	{
+		return 0xFF;
+	}
 	//if (address == 0xFF44)
 	//	return 0x90;
 	if (address == 0xFF4D)
@@ -90,6 +99,16 @@ static unsigned char read_memory(const unsigned int address)
 
 static void write_memory(const unsigned int address, unsigned char value)
 {
+	if (address == JOYP)
+	{
+		int yurt = 1;
+	}
+	
+	if (address == LCDC)
+	{
+		int yurt = 1;
+	}
+	
 	if (address == DIV)
 	{
 		SYSCLK = 0x0000;
@@ -704,6 +723,9 @@ struct GPUData
 	int windowY = 0;
 	int dots = 0;
 	int oam_idx = 0;
+	bool leave_oam = false;
+	bool prevLCD = false;
+	int mode3_startup = 0;
 	
 	bool windowDisplayed = false;
 	
@@ -726,28 +748,53 @@ struct GPUData
 	
 	void tick()
 	{
-		switch (m_state)
+		if (readLCDCbit(7))
 		{
-			case Mode::OAM_SEARCH:
-				oam_search();
-				break;
-			case Mode::PIXEL_TRANSFER:
-				pixel_transfer();
-				break;
-			case Mode::HBLANK:
-				hblank();
-				break;
-			case Mode::VBLANK:
-				vblank();
-				break;
-			default:
-				abort();
+			if (prevLCD == false)
+			{
+				write_memory(LY, 0);
+				dots = 356;
+				m_state = Mode::HBLANK;
+				prevLCD = true;
+			}
+			
+			switch (m_state)
+			{
+				case Mode::OAM_SEARCH:
+					oam_search();
+					break;
+				case Mode::PIXEL_TRANSFER:
+					pixel_transfer();
+					break;
+				case Mode::HBLANK:
+					hblank();
+					break;
+				case Mode::VBLANK:
+					vblank();
+					break;
+				default:
+					abort();
+			}
+			dots++;
 		}
-		dots++;
+		else
+		{
+			prevLCD = false;
+		}
 	}
 	
 	void oam_search()
 	{
+		if (leave_oam)
+		{
+			oam_idx = 0;
+			xpos = 0;
+			m_state = Mode::PIXEL_TRANSFER;
+			mode3_startup = 0;
+			leave_oam = false;
+			return;
+		}
+		
 		auto ly = read_memory(LY);
 		if (dots % 2 == 0)
 		{
@@ -781,10 +828,10 @@ struct GPUData
 			oam_idx++;
 			if (oam_idx == 40)
 			{
-				//ticks = 0;
-				oam_idx = 0;
-				xpos = 0;
-				m_state = Mode::PIXEL_TRANSFER;
+				leave_oam = true;
+//				oam_idx = 0;
+//				xpos = 0;
+//				m_state = Mode::PIXEL_TRANSFER;
 			}
 		}
 		//ticks++;
@@ -828,6 +875,12 @@ struct GPUData
 	
 	void pixel_transfer()
 	{
+		if (mode3_startup < 12)
+		{
+			mode3_startup++;
+			return;
+		}
+		
 		auto ly = read_memory(LY);
 		auto scx = read_memory(SCX);
 		auto scxpos = (xpos + scx) % 256;
@@ -965,6 +1018,10 @@ struct GPUData
 			}
 		}
 		
+		auto tile = ((ly / 8) * 20) + (xpos / 8);
+		auto tilerow = readTileRow(TILEBLOCK0, tile, ly % 8);
+		//display[ly][xpos] = tilerow[xpos % 8];
+		
 		if (xpos >= 159)
 			m_state = Mode::HBLANK;
 		else
@@ -989,12 +1046,12 @@ struct GPUData
 			{
 				visible_idx = 0;
 				memset(visible, 0, 10);
-				dots = 0;
+				dots = -1;
 				m_state = Mode::OAM_SEARCH;
 			}
 			else
 			{
-				dots = 0;
+				dots = -1;
 				m_state = Mode::VBLANK;
 			}
 		}
@@ -1007,7 +1064,7 @@ struct GPUData
 			unsigned char value = read_memory(LY);
 			value++;
 			write_memory(LY, value);
-			dots = 0;
+			dots = -1;
 			
 			if (value >= 154)
 			{
@@ -1017,6 +1074,8 @@ struct GPUData
 				memset(visible, 0, 10);
 				//memset(display, 4, display_size);
 				m_state = Mode::OAM_SEARCH;
+				do_continue = true;
+				do_draw = true;
 			}
 		}
 	}
@@ -1572,7 +1631,7 @@ void GameboyScreen::Init()
 {
 	m_input = std::make_unique<age::SDLInput>();
 	m_input->SetQuitCallback([this]() { m_engine->Quit(); });
-	m_input->m_keyupmap.insert({'c', [&] { m_continue = true; }});
+	m_input->m_keyupmap.insert({'c', [&] { do_continue = true; }});
 
 	memset(display, 4, display_size);
 	memset(memory, 0, memory_size);
@@ -1594,9 +1653,15 @@ void GameboyScreen::Init()
 	// std::string path = "/Users/owenz0r/Downloads/11-op a,(hl).gb"; -- passed
 	// std::string path = "/Users/owenz0r/Downloads/cpu_instrs.gb";
 	// std::string path = "/Users/owenz0r/Downloads/dmg-acid2.gb";
-	// std::string path = "/Users/owenz0r/Downloads/pokemon.gb";
-	 std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
-	// std::string path = "/Users/owenz0r/Downloads/tetris.gb";
+	 std::string path = "/Users/owenz0r/Downloads/pokemon.gb";
+	// std::string path = "/Users/owenz0r/Downloads/instr_timing.gb";
+	//	std::string path = "/Users/owenz0r/Downloads/tetris.gb";
+	// std::string path = "/Users/owenz0r/Downloads/mem_timing.gb";
+	// std::string path = "/Users/owenz0r/Downloads/01-read_timing.gb";
+	// std::string path = "/Users/owenz0r/Downloads/02-write_timing.gb";
+	// std::string path = "/Users/owenz0r/Downloads/03-modify_timing.gb";
+	//std::string path = "/Users/owenz0r/Downloads/mts-20240926-1737-443f6e1/acceptance/ppu/lcdon_timing-GS.gb";
+	// std::string path = "/Users/owenz0r/Downloads/smw.gb";
 #endif
 
 	std::ifstream input(path, std::ios::binary);
@@ -1655,7 +1720,7 @@ void GameboyScreen::Init()
 
 void GameboyScreen::Update(const double dt)
 {
-	if (m_continue)
+	if (do_continue)
 	{
 		//if (do_timings)
 		//	log_timings();
@@ -1736,6 +1801,7 @@ static void handleInterrupts()
 
 static void executeOpcode(unsigned char opcode)
 {
+	//logfile << "executeOpcode()" << std::endl;
 	int waits = 0;
 
 	static int count = 0;
@@ -5875,44 +5941,49 @@ static void checkerboard(age::Renderer* renderer)
 
 void GameboyScreen::Draw()
 {
-	//checkerboard(m_renderer);
-	for (int y=0; y < 144; ++y)
+	//logfile << "Draw()" << std::endl;
+	if (do_draw)
 	{
-		for (int x=0; x < 160; ++x)
+		//checkerboard(m_renderer);
+		for (int y=0; y < 144; ++y)
 		{
-			auto value = display[y][x]; // y+16
-			auto color = age::Color::Black();
-			switch (value) {
-				case 0:
-				{
-					color = age::Color::White();
-					break;
+			for (int x=0; x < 160; ++x)
+			{
+				auto value = display[y][x]; // y+16
+				auto color = age::Color::Black();
+				switch (value) {
+					case 0:
+					{
+						color = age::Color::White();
+						break;
+					}
+					case 1:
+					{
+						color = age::Color::LightGray();
+						break;
+					}
+					case 2:
+					{
+						color = age::Color::DarkGray();
+						break;
+					}
+					case 3:
+					{
+						color = age::Color::Black();
+						break;
+					}
+					case 4:
+					{
+						color = age::Color::Red();
+						break;
+					}
+						
+					default:
+						abort();
 				}
-				case 1:
-				{
-					color = age::Color::LightGray();
-					break;
-				}
-				case 2:
-				{
-					color = age::Color::DarkGray();
-					break;
-				}
-				case 3:
-				{
-					color = age::Color::Black();
-					break;
-				}
-				case 4:
-				{
-					color = age::Color::Red();
-					break;
-				}
-					
-				default:
-					abort();
+				m_renderer->DrawQuad(age::Rect(x,y, 1, 1), color);
 			}
-			m_renderer->DrawQuad(age::Rect(x,y, 1, 1), color);
 		}
+		do_draw = false;
 	}
 }
